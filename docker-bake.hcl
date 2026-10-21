@@ -19,6 +19,8 @@ variable "PHP_TAG" {
 }
 
 variable "ALPINE_VERSION" { default = "3" }
+# changes per CI day so final stages re-run apk/apt upgrade instead of reusing cached package layers
+variable "PKG_STAMP" { default = "" }
 variable "FRANKENPHP_VERSION" { default = "1" }
 variable "FRANKENPHP_SRC_VERSION" { default = "1.13.1" }
 variable "GO_VERSION" { default = "1.27" }
@@ -103,6 +105,7 @@ target "_common" {
     OPENTELEMETRY_VERSION = OPENTELEMETRY_VERSION
     PROTOBUF_VERSION      = PROTOBUF_VERSION
     EXTENSIONS            = join(" ", VERSIONS[PHP_VERSION].extensions)
+    PKG_STAMP             = PKG_STAMP
   }
   labels = {
     for ext, version in {

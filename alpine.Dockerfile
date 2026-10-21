@@ -43,12 +43,14 @@ RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1
     done
 
 FROM php:${PHP_VERSION}-zts-alpine AS cli
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
 # hadolint ignore=DL3018
 RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
-    xargs apk add --no-cache setpriv < /tmp/runtime-deps \
+    apk upgrade --no-cache \
+    && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY rootfs/common/ rootfs/php/ /
 ENV APP_ROOT=/app \
@@ -61,12 +63,14 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "-a"]
 
 FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-alpine AS frankenphp
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
 # hadolint ignore=DL3018
 RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
-    xargs apk add --no-cache setpriv < /tmp/runtime-deps \
+    apk upgrade --no-cache \
+    && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && chmod 1777 /data/caddy /config/caddy
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
@@ -81,12 +85,14 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
 FROM php:${PHP_VERSION}-fpm-alpine AS php-fpm
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-nts /out/ /
 # hadolint ignore=DL3018
 RUN --mount=type=bind,from=ext-builder-nts,source=/runtime-deps,target=/tmp/runtime-deps \
-    xargs apk add --no-cache setpriv < /tmp/runtime-deps \
+    apk upgrade --no-cache \
+    && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
@@ -125,10 +131,12 @@ ENTRYPOINT ["docker-entrypoint.sh", "/init"]
 CMD []
 
 FROM alpine:${ALPINE_VERSION} AS nginx
+ARG PKG_STAMP
 ARG NGINX_VERSION
 ADD https://nginx.org/keys/nginx_signing.rsa.pub /etc/apk/keys/
 # hadolint ignore=DL3018
 RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,2 /etc/alpine-release)" >> /etc/apk/repositories \
+    && apk upgrade --no-cache \
     && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst setpriv
 COPY rootfs/common/ rootfs/nginx/ /
 ENV APP_ROOT=/app \

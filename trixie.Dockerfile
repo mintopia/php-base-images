@@ -42,12 +42,14 @@ RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1
     done
 
 FROM php:${PHP_VERSION}-zts-trixie AS cli
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
     apt-get update \
+    && apt-get upgrade -y \
     && xargs apt-get install -y --no-install-recommends < /tmp/runtime-deps \
     && xargs apt-mark manual < /tmp/runtime-deps \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
@@ -65,12 +67,14 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "-a"]
 
 FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-trixie AS frankenphp
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
     apt-get update \
+    && apt-get upgrade -y \
     && xargs apt-get install -y --no-install-recommends < /tmp/runtime-deps \
     && xargs apt-mark manual < /tmp/runtime-deps \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
@@ -90,12 +94,14 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
 FROM php:${PHP_VERSION}-fpm-trixie AS php-fpm
+ARG PKG_STAMP
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-nts /out/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext-builder-nts,source=/runtime-deps,target=/tmp/runtime-deps \
     apt-get update \
+    && apt-get upgrade -y \
     && xargs apt-get install -y --no-install-recommends < /tmp/runtime-deps \
     && xargs apt-mark manual < /tmp/runtime-deps \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
@@ -142,11 +148,13 @@ ENTRYPOINT ["docker-entrypoint.sh", "/init"]
 CMD []
 
 FROM debian:trixie-slim AS nginx
+ARG PKG_STAMP
 ARG NGINX_VERSION
 ADD --chmod=644 https://nginx.org/keys/nginx_signing.key /usr/share/keyrings/nginx.asc
 # hadolint ignore=DL3008
 RUN echo 'deb [signed-by=/usr/share/keyrings/nginx.asc] http://nginx.org/packages/debian trixie nginx' > /etc/apt/sources.list.d/nginx.list \
     && apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends "nginx=${NGINX_VERSION}-*" gettext-base \
     && rm -rf /var/lib/apt/lists/*
 COPY rootfs/common/ rootfs/nginx/ /

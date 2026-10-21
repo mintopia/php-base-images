@@ -56,6 +56,21 @@ github_release() {
 	safe "$(curl -fsSL --retry 3 "${auth[@]}" "https://api.github.com/repos/$1/releases/latest" | jq -r '.tag_name | ltrimstr("v")')"
 }
 
+trivy=aquasec/trivy:0.76.1
+trivy_dir=$(mktemp -d)
+trap 'rm -rf "$trivy_dir"' EXIT
+
+# CVEs in OS packages that have a fixed package available; the PKG_STAMP upgrade layer picks those up on rebuild
+fixable_cves() {
+	local distro
+	docker buildx imagetools inspect "$1" --format "{{ json (index .SBOM \"$2\").SPDX }}" > "$trivy_dir/sbom.json" || return 1
+	distro=$(jq -r '[.packages[].externalRefs[]?.referenceLocator | capture("^pkg:(apk|deb)/.*[?&]distro=(?<d>[a-z]+-[0-9.]+)").d][0] // empty' "$trivy_dir/sbom.json")
+	[ -n "$distro" ] || return 1
+	docker run --rm --user "$(id -u):$(id -g)" -v "$trivy_dir:/work" -e TRIVY_CACHE_DIR=/work/cache "$trivy" sbom -q --distro "${distro/-//}" \
+		--pkg-types os --ignore-unfixed --format json /work/sbom.json \
+		| jq -r '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] | unique | if length > 0 then "\(length): \(.[:3] | join(","))" else empty end'
+}
+
 matrix=$(jq -c '.variable.VERSIONS.default' "$root/versions.json")
 mapfile -t keys < <(jq -r 'keys[]' <<<"$matrix" | sort -V)
 latest=$(jq -r 'to_entries | map(select(.value.stable) | .key)[]' <<<"$matrix" | sort -V | tail -1)
@@ -74,8 +89,8 @@ redis=$(packagist phpredis/phpredis)
 otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
-common=$(jq -n --arg redis "$redis" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" \
-	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6}')
+common=$(jq -n --arg redis "$redis" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
+	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -170,6 +185,10 @@ for key in "${selected[@]}"; do
 						'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
 					[ -z "$diff" ] || stale+=("$t/$arch($diff)")
 				done
+				# any stale target rebuilds the whole lane, so only scan while it still looks current
+				[ ${#stale[@]} -eq 0 ] || continue
+				cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
+				[ -z "$cves" ] || stale+=("$t(fixable CVEs $cves)")
 			done
 			if [ ${#stale[@]} -eq 0 ]; then
 				log "up to date: $key $os"
