@@ -104,6 +104,14 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Monthly and `workflow_dispatch` with `force`: rebuild everything.
 - Pull requests: build and smoke-test 8.5 amd64 on both OSes (label `full-build` for all lanes), no publish.
 
+### Building PHP from source
+
+If the official `php` images lag a PHP release, build that version from its php-src tag instead: set `"source": "src"` on it in `versions.json`, or run the workflow with `php_source: src` (`upstream` forces the opposite; default reads `versions.json`). The latest php-src tag for the minor is used (RCs for unstable versions). Tags are unchanged. See `docs/decisions/0006-php-src-fallback.md`.
+
+```
+PHP_SOURCE=src PHP_TAG=$(scripts/resolve-php-tag.sh 8.5) docker buildx bake -f docker-bake.hcl -f versions.json cli
+```
+
 Optional repo settings: variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits.
 
 Design decisions are in `docs/decisions/`; vocabulary in `GLOSSARY.md`.

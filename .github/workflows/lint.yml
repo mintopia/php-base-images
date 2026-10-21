@@ -14,12 +14,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [alpine, trixie]
+        dockerfile: [alpine, trixie, php-src]
     steps:
       - uses: actions/checkout@v7
       - uses: hadolint/hadolint-action@v3.5.0
         with:
-          dockerfile: ${{ matrix.os }}.Dockerfile
+          dockerfile: ${{ matrix.dockerfile }}.Dockerfile
 
   shellcheck:
     runs-on: ubuntu-24.04
