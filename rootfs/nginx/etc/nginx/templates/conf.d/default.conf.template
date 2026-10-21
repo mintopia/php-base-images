@@ -4,6 +4,8 @@ server {
     index index.php index.html;
     client_max_body_size ${PHP_POST_MAX_SIZE};
     ${NGINX_REAL_IP}
+    ${NGINX_RESOLVER}
+    set $php_fpm ${PHP_FPM_HOST}:${PHP_FPM_PORT};
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -17,6 +19,6 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
-        fastcgi_pass ${PHP_FPM_HOST}:${PHP_FPM_PORT};
+        fastcgi_pass $php_fpm;
     }
 }

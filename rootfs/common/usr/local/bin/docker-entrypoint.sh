@@ -46,7 +46,7 @@ if [ -d /etc/nginx/templates ]; then
 	done
 	NGINX_STATUS_LOCATIONS=
 	for path in ${PHP_FPM_STATUS_PATH:-} ${PHP_FPM_PING_PATH:-}; do
-		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${path} { ${allow}deny all; include fastcgi_params; fastcgi_param SCRIPT_FILENAME ${path}; fastcgi_pass ${PHP_FPM_HOST}:${PHP_FPM_PORT}; }
+		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${path} { ${allow}deny all; include fastcgi_params; fastcgi_param SCRIPT_FILENAME ${path}; fastcgi_pass \$php_fpm; }
 "
 	done
 	if [ -n "${NGINX_STATUS_PATH:-}" ]; then
@@ -60,11 +60,17 @@ if [ -d /etc/nginx/templates ]; then
 	if [ -n "$NGINX_REAL_IP" ]; then
 		NGINX_REAL_IP="${NGINX_REAL_IP}real_ip_header ${NGINX_REAL_IP_HEADER:-X-Forwarded-For}; real_ip_recursive on;"
 	fi
-	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP
+	# re-resolve PHP_FPM_HOST so a restarted php-fpm container's new IP is picked up
+	NGINX_RESOLVER=$(awk '$1 == "nameserver" && $2 !~ /%/ { printf "%s ", ($2 ~ /:/ ? "[" $2 "]" : $2) }' /etc/resolv.conf)
+	if [ -n "$NGINX_RESOLVER" ]; then
+		[ -f /proc/net/if_inet6 ] || NGINX_RESOLVER="${NGINX_RESOLVER}ipv6=off "
+		NGINX_RESOLVER="resolver ${NGINX_RESOLVER}valid=10s;"
+	fi
+	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/etc/nginx/${template#/etc/nginx/templates/}"
 		# shellcheck disable=SC2016
-		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP}' \
+		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP} ${NGINX_RESOLVER}' \
 			< "$template" > "${target%.template}"
 	done
 fi
