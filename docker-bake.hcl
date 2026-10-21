@@ -3,6 +3,20 @@ variable "OS" { default = "alpine" }
 variable "PLATFORMS" { default = "" }
 variable "PUSH" { default = "false" }
 variable "CACHE_REF" { default = "" }
+variable "PHP_SOURCE" {
+  default = "upstream"
+  validation {
+    condition     = contains(["upstream", "src"], PHP_SOURCE)
+    error_message = "PHP_SOURCE must be upstream or src."
+  }
+}
+variable "PHP_TAG" {
+  default = ""
+  validation {
+    condition     = PHP_SOURCE != "src" || PHP_TAG != ""
+    error_message = "PHP_TAG (php-src tag, e.g. php-8.5.11) is required when PHP_SOURCE=src."
+  }
+}
 
 variable "ALPINE_VERSION" { default = "3" }
 variable "FRANKENPHP_VERSION" { default = "1" }
@@ -34,6 +48,25 @@ function "base_labels" {
     "org.opencontainers.image.base.name"   = name
     "org.opencontainers.image.base.digest" = digest
   }
+}
+
+function "os_base" {
+  params = []
+  result = { alpine = "docker.io/library/alpine:${ALPINE_VERSION}", trixie = "docker.io/library/debian:trixie-slim" }[OS]
+}
+
+# PHP_SOURCE=src swaps the php:* bases for php-src.Dockerfile builds on the OS base; tags are unchanged
+function "php_labels" {
+  params = [upstream, digest]
+  result = PHP_SOURCE == "src" ? merge(base_labels(os_base(), NGINX_BASE_DIGEST), {
+    "net.mintopia.php.source" = "php-src"
+    "net.mintopia.php.tag"    = PHP_TAG
+  }) : base_labels(upstream, digest)
+}
+
+function "php_contexts" {
+  params = [variant]
+  result = PHP_SOURCE == "src" ? { "php:${VERSIONS[PHP_VERSION].tag}-${variant}-${OS}" = "target:src-${variant}" } : {}
 }
 
 function "cache_from" {
@@ -82,7 +115,8 @@ target "cli" {
   inherits   = ["_common"]
   target     = "cli"
   tags       = [tag("cli")]
-  labels     = base_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-zts-${OS}", ZTS_DIGEST)
+  labels     = php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-zts-${OS}", ZTS_DIGEST)
+  contexts   = php_contexts("zts")
   cache-from = cache_from("cli")
   cache-to   = cache_to("cli")
 }
@@ -100,7 +134,8 @@ target "php-fpm" {
   inherits   = ["_common"]
   target     = "php-fpm"
   tags       = [tag("php-fpm")]
-  labels     = base_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST)
+  labels     = php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST)
+  contexts   = php_contexts("fpm")
   cache-from = cache_from("php-fpm")
   cache-to   = cache_to("php-fpm")
 }
@@ -109,7 +144,8 @@ target "php-fpm-nginx" {
   inherits = ["_common"]
   target   = "php-fpm-nginx"
   tags     = [tag("php-fpm-nginx")]
-  labels = merge(base_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST), {
+  contexts = php_contexts("fpm")
+  labels = merge(php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST), {
     "net.mintopia.nginx.version" = NGINX_VERSION
     "net.mintopia.s6.version"    = S6_OVERLAY_VERSION
   })
@@ -124,9 +160,29 @@ target "nginx" {
   target     = "nginx"
   tags       = [tag("nginx")]
   args       = { NGINX_VERSION = NGINX_VERSION, ALPINE_VERSION = ALPINE_VERSION }
-  labels = merge(base_labels({ alpine = "docker.io/library/alpine:${ALPINE_VERSION}", trixie = "docker.io/library/debian:trixie-slim" }[OS], NGINX_BASE_DIGEST), {
+  labels = merge(base_labels(os_base(), NGINX_BASE_DIGEST), {
     "net.mintopia.nginx.version" = NGINX_VERSION
   })
   cache-from = cache_from("nginx")
   cache-to   = cache_to("nginx")
+}
+
+target "_src" {
+  dockerfile = "php-src.Dockerfile"
+  platforms  = PLATFORMS == "" ? [] : split(",", PLATFORMS)
+  args       = { PHP_TAG = PHP_TAG, OS = OS, ALPINE_VERSION = ALPINE_VERSION }
+}
+
+target "src-zts" {
+  inherits   = ["_src"]
+  target     = "zts"
+  cache-from = cache_from("src-zts")
+  cache-to   = cache_to("src-zts")
+}
+
+target "src-fpm" {
+  inherits   = ["_src"]
+  target     = "fpm"
+  cache-from = cache_from("src-fpm")
+  cache-to   = cache_to("src-fpm")
 }
