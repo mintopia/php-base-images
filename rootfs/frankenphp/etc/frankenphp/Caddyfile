@@ -11,7 +11,7 @@
 {$CADDY_EXTRA_CONFIG}
 
 {$SERVER_NAME::8080} {
-	root {$APP_ROOT}
+	root {$APP_PUBLIC_PATH}
 	encode zstd br gzip
 
 	{$CADDY_SERVER_EXTRA_DIRECTIVES}

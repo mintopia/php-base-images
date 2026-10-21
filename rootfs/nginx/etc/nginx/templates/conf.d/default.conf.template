@@ -1,6 +1,6 @@
 server {
     listen [::]:8080 ipv6only=off;
-    root ${APP_ROOT};
+    root ${APP_PUBLIC_PATH};
     index index.php index.html;
     client_max_body_size ${PHP_POST_MAX_SIZE};
 
