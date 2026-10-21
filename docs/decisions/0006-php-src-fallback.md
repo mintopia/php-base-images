@@ -20,7 +20,7 @@ In `src` mode `php-src.Dockerfile` builds drop-in `zts` and `fpm` images from th
 - An `src` lane compiles PHP twice (zts, fpm), about 10 minutes per arch, cached in the registry under `${CACHE_REF}-src-zts` and `-src-fpm`.
 - We own the configure flags and must track docker-library changes when we use this path.
 - ADR 0001 is unaffected: `cli` and `frankenphp` still share the ZTS build, now from `src-zts`.
-- ADR 0005 is unaffected: trixie images are still purged and flattened.
+- ADR 0005 is unaffected: trixie images still purge `PHPIZE_DEPS` and stay layered, now on `debian:trixie-slim` rather than the upstream php image.
 - ADR 0003: `src` images record `net.mintopia.php.source=php-src`, `net.mintopia.php.tag` and the OS base digest instead of the php image digest. A new php-src tag, or switching source either way, makes the lane stale.
 
 ## Supersedes
