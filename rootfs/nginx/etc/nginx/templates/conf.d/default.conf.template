@@ -1,8 +1,9 @@
 server {
-    listen [::]:8080 ipv6only=off;
+    ${NGINX_LISTEN}
     root ${APP_PUBLIC_PATH};
     index index.php index.html;
     client_max_body_size ${PHP_POST_MAX_SIZE};
+    ${NGINX_REAL_IP}
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;

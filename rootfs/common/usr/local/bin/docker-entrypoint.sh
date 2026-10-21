@@ -16,6 +16,15 @@ if [ -n "${PUID:-}" ]; then
 fi
 export PHP_FPM_USER="$run_as" PHP_FPM_GROUP="$run_as" NGINX_USER="$run_as"
 
+if [ -f /proc/net/if_inet6 ]; then
+	PHP_FPM_LISTEN='[::]:9000'
+	NGINX_LISTEN='listen 8080; listen [::]:8080 ipv6only=on;'
+else
+	PHP_FPM_LISTEN='0.0.0.0:9000'
+	NGINX_LISTEN='listen 8080;'
+fi
+export PHP_FPM_LISTEN NGINX_LISTEN
+
 if [ -d /usr/local/etc/php-fpm.d ]; then
 	status_conf=/usr/local/etc/php-fpm.d/zz-status.conf
 	rm -f "$status_conf"
@@ -40,11 +49,22 @@ if [ -d /etc/nginx/templates ]; then
 		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${path} { ${allow}deny all; include fastcgi_params; fastcgi_param SCRIPT_FILENAME ${path}; fastcgi_pass ${PHP_FPM_HOST}:${PHP_FPM_PORT}; }
 "
 	done
-	export NGINX_STATUS_LOCATIONS
+	if [ -n "${NGINX_STATUS_PATH:-}" ]; then
+		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${NGINX_STATUS_PATH} { ${allow}deny all; stub_status; }
+"
+	fi
+	NGINX_REAL_IP=
+	for cidr in ${NGINX_REAL_IP_FROM:-}; do
+		NGINX_REAL_IP="${NGINX_REAL_IP}set_real_ip_from ${cidr}; "
+	done
+	if [ -n "$NGINX_REAL_IP" ]; then
+		NGINX_REAL_IP="${NGINX_REAL_IP}real_ip_header ${NGINX_REAL_IP_HEADER:-X-Forwarded-For}; real_ip_recursive on;"
+	fi
+	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/etc/nginx/${template#/etc/nginx/templates/}"
 		# shellcheck disable=SC2016
-		envsubst '${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS}' \
+		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP}' \
 			< "$template" > "${target%.template}"
 	done
 fi

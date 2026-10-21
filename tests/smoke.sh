@@ -23,6 +23,8 @@ fail() {
 
 mkdir -p "$work/public"
 echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
+# shellcheck disable=SC2016
+echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
 
@@ -91,10 +93,16 @@ case "$target" in
 		;;
 	php-fpm-nginx)
 		check_php
-		start /srv/public -e APP_ROOT=/srv -e PUID=1000 -e PHP_FPM_STATUS_PATH=/status "$image"
+		start /srv/public -e APP_ROOT=/srv -e PUID=1000 -e PHP_FPM_STATUS_PATH=/status -e NGINX_STATUS_PATH=/nginx_status "$image"
 		http_ok
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/status | grep -q '^pool:' || fail "status not served locally"
+		[ "$(status_code /nginx_status)" = 403 ] || fail "nginx status not restricted"
+		docker exec "$id" curl -fsS http://127.0.0.1:8080/nginx_status | grep -q '^Active connections' || fail "nginx status not served locally"
+		addr=$(docker exec "$id" curl -fsS http://127.0.0.1:8080/addr.php)
+		[ "$addr" = 127.0.0.1 ] || fail "IPv4 client seen as '$addr'"
+		addr=$(docker exec "$id" curl -fsS -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:8080/addr.php)
+		[ "$addr" = 127.0.0.1 ] || fail "untrusted X-Forwarded-For honoured: '$addr'"
 		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
 		;;
@@ -105,9 +113,11 @@ case "$target" in
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
-		start /app/public "$image"
+		start /app/public -e NGINX_REAL_IP_FROM='0.0.0.0/0 ::/0' "$image"
 		docker exec "$id" nginx -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
 		http_ok
+		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
+		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
 		;;
 	*)
 		fail "unknown target"
