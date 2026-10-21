@@ -1,0 +1,21 @@
+server {
+    listen [::]:8080 ipv6only=off;
+    root ${APP_ROOT};
+    index index.php index.html;
+    client_max_body_size ${PHP_POST_MAX_SIZE};
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    ${NGINX_STATUS_LOCATIONS}
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_pass ${PHP_FPM_HOST}:${PHP_FPM_PORT};
+    }
+}

@@ -71,7 +71,7 @@ A series of PHP base images.
 Tags consist of <version>-<os>-<type>. There should also be simple tags:
 
  - `latest` - Latest stable PHP (8.5) CLI with Alpine Linux
- - `develop` - Latest unstable PHP (8.6) CLI with Alpine Linux
+ - `unstable` - Latest unstable PHP (8.6, latest RC) CLI with Alpine Linux
 
 If any of the components in the tag are missing, then they get the default, eg:
 
