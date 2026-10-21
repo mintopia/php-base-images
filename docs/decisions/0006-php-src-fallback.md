@@ -1,6 +1,6 @@
 # Decision: Build PHP from php-src as an opt-in fallback
 
-Status: accepted
+Status: superseded
 Date: 2026-10-21
 
 ## Context

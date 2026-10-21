@@ -4,7 +4,7 @@ variable "PLATFORMS" { default = "" }
 variable "PUSH" { default = "false" }
 variable "CACHE_REF" { default = "" }
 variable "PHP_SOURCE" {
-  default = "upstream"
+  default = "src"
   validation {
     condition     = contains(["upstream", "src"], PHP_SOURCE)
     error_message = "PHP_SOURCE must be upstream or src."
@@ -14,7 +14,7 @@ variable "PHP_TAG" {
   default = ""
   validation {
     condition     = PHP_SOURCE != "src" || PHP_TAG != ""
-    error_message = "PHP_TAG (php-src tag, e.g. php-8.5.11) is required when PHP_SOURCE=src."
+    error_message = "PHP_TAG (php-src tag, e.g. php-8.5.11) is required when PHP_SOURCE=src (the default); use scripts/resolve-php-tag.sh."
   }
 }
 

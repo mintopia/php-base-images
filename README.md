@@ -92,8 +92,10 @@ frankenphp: `SERVER_NAME` (default `:8080`), plus upstream `FRANKENPHP_CONFIG`, 
 ## Building locally
 
 ```
-docker buildx bake -f docker-bake.hcl -f versions.json            # 8.5 alpine, all targets
-PHP_VERSION=8.4 OS=trixie docker buildx bake -f docker-bake.hcl -f versions.json cli
+PHP_TAG=$(scripts/resolve-php-tag.sh 8.5) docker buildx bake -f docker-bake.hcl -f versions.json   # 8.5 alpine, all targets
+PHP_VERSION=8.4 OS=trixie PHP_TAG=$(scripts/resolve-php-tag.sh 8.4) docker buildx bake -f docker-bake.hcl -f versions.json cli
+PHP_VERSION=8.6 PHP_TAG=$(scripts/resolve-php-tag.sh 8.6 --unstable) docker buildx bake -f docker-bake.hcl -f versions.json cli
+PHP_SOURCE=upstream docker buildx bake -f docker-bake.hcl -f versions.json cli                   # on official php images
 tests/smoke.sh php:8.5-alpine-cli cli
 ```
 
@@ -105,13 +107,9 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Pull requests: build and smoke-test 8.5 amd64 on both OSes (label `full-build` for all lanes), no publish.
 - Daily cleanup: untagged images older than a day that no tag references are deleted from GHCR, so superseded `@sha256:` digests stop resolving. Pin tags, not digests. Manual runs of `cleanup` default to dry-run.
 
-### Building PHP from source
+### PHP source
 
-If the official `php` images lag a PHP release, build that version from its php-src tag instead: set `"source": "src"` on it in `versions.json`, or run the workflow with `php_source: src` (`upstream` forces the opposite; default reads `versions.json`). The latest php-src tag for the minor is used (RCs for unstable versions). Tags are unchanged. See `docs/decisions/0006-php-src-fallback.md`.
-
-```
-PHP_SOURCE=src PHP_TAG=$(scripts/resolve-php-tag.sh 8.5) docker buildx bake -f docker-bake.hcl -f versions.json cli
-```
+PHP is compiled from the latest php-src tag for each minor (RCs for unstable versions), so a release ships as soon as php-src tags it. To build a version on the official `php` images instead, set `"source": "upstream"` on it in `versions.json`, or run the workflow with `php_source: upstream` (`src` forces the default; `versions.json` reads the file). Tags are the same either way. See `docs/decisions/0008-php-src-default.md`.
 
 Optional repo settings: variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits.
 

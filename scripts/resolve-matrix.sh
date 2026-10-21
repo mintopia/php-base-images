@@ -115,9 +115,9 @@ for key in "${selected[@]}"; do
 	tag=$(jq -r .tag <<<"$version")
 	exts=$(jq -c .extensions <<<"$version")
 	stable=$(jq -r .stable <<<"$version")
-	php_source=${only_source:-$(jq -r '.source // "upstream"' <<<"$version")}
+	php_source=${only_source:-$(jq -r '.source // "src"' <<<"$version")}
 	[[ $php_source =~ ^(upstream|src)$ ]] || { log "$key: source must be upstream or src, got '$php_source'"; exit 1; }
-	src_vars='{}'
+	src_vars='{"PHP_SOURCE": "upstream"}'
 	if [ "$php_source" = src ]; then
 		unstable=()
 		[ "$stable" = true ] || unstable=(--unstable)
