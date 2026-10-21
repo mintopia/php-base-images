@@ -1,19 +1,18 @@
-# Decision: Trixie PHP images are flattened to a single layer
+# Decision: Trixie PHP images stay layered (flattening rejected)
 
 Status: accepted
 Date: 2026-10-21
 
 ## Context
-Upstream `php:*-trixie` images keep the full build toolchain (`PHPIZE_DEPS`: gcc, make, autoconf and friends) in their layers, so `php:8.5-zts-trixie` is around 780 MB before any extension. Purging those packages in our layer removes nothing from the pull because the files live in upstream's layers. Alpine images do not have this problem.
+Upstream `php:*-trixie` images keep the full build toolchain (`PHPIZE_DEPS`) in their layers, so `php:8.5-zts-trixie` is around 780 MB before any extension. Purging those packages in our layer removes nothing from the pull because the files live in upstream's layers. Flattening the final stage with `FROM scratch` + `COPY --from` was tried and roughly halved the images (cli 869 → 528 MB).
 
 ## Decision
-Trixie `cli`, `php-fpm`, `php-fpm-nginx` and `frankenphp` purge `PHPIZE_DEPS`, then the final stage is `FROM scratch` with a single `COPY --from` of the purged filesystem, re-declaring ENV, WORKDIR, EXPOSE, ENTRYPOINT and CMD. The standalone `nginx` target and all Alpine targets stay layered.
+Keep the trixie images layered on the upstream base. `PHPIZE_DEPS` is still purged so the compilers are absent from the runtime and from scanner output, but no size is reclaimed. Flattening was reverted the same day.
 
 ## Consequences
-- Roughly half the pull size for trixie PHP images.
-- No layer sharing with upstream; every rebuild pushes one full layer. The registry build cache still makes rebuilds fast.
-- Base-image provenance in attestations is lost; `org.opencontainers.image.base.*` labels still record it.
-- `install-php-extensions` still works in the image because it installs build tools on demand; PIE needs them installed first.
+- Trixie PHP images are roughly 800-950 MB; Alpine is the slim choice.
+- Layer sharing with upstream and base-image provenance in attestations are preserved; rebuilds push only changed layers.
+- Flattening remains available as a one-stage change per target if pull size becomes a problem.
 
 ## Supersedes
 None

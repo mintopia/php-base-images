@@ -41,7 +41,7 @@ RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1
         && tar -C /s6 -Jxpf "s6-overlay-$f.tar.xz" || exit 1; \
     done
 
-FROM php:${PHP_VERSION}-zts-trixie AS cli-rootfs
+FROM php:${PHP_VERSION}-zts-trixie AS cli
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
@@ -55,16 +55,6 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && rm -rf /var/lib/apt/lists/* \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY rootfs/common/ rootfs/php/ /
-
-FROM scratch AS cli
-# hadolint ignore=DL3067
-COPY --from=cli-rootfs / /
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    PHPIZE_DEPS="autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c" \
-    PHP_INI_DIR=/usr/local/etc/php \
-    PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_CPPFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_LDFLAGS="-Wl,-O1 -pie"
 ENV APP_ROOT=/app/public \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
@@ -74,7 +64,7 @@ WORKDIR /app
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "-a"]
 
-FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-trixie AS frankenphp-rootfs
+FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-trixie AS frankenphp
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-zts /out/ /
@@ -89,19 +79,6 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && chmod 1777 /data/caddy /config/caddy
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
-
-FROM scratch AS frankenphp
-# hadolint ignore=DL3067
-COPY --from=frankenphp-rootfs / /
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    PHPIZE_DEPS="autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c" \
-    PHP_INI_DIR=/usr/local/etc/php \
-    PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_CPPFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_LDFLAGS="-Wl,-O1 -pie"
-ENV XDG_CONFIG_HOME=/config \
-    XDG_DATA_HOME=/data \
-    GODEBUG=cgocheck=0
 ENV APP_ROOT=/app/public \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
@@ -112,7 +89,7 @@ EXPOSE 8080
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
-FROM php:${PHP_VERSION}-fpm-trixie AS php-fpm-rootfs
+FROM php:${PHP_VERSION}-fpm-trixie AS php-fpm
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=ext-builder-nts /out/ /
@@ -127,17 +104,6 @@ RUN --mount=type=bind,from=ext-builder-nts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
-
-FROM scratch AS php-fpm
-# hadolint ignore=DL3067
-COPY --from=php-fpm-rootfs / /
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    PHPIZE_DEPS="autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c" \
-    PHP_INI_DIR=/usr/local/etc/php \
-    PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_CPPFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_LDFLAGS="-Wl,-O1 -pie"
-STOPSIGNAL SIGQUIT
 ENV APP_ROOT=/app/public \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
@@ -155,7 +121,7 @@ EXPOSE 9000
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm", "-R"]
 
-FROM php-fpm-rootfs AS php-fpm-nginx-rootfs
+FROM php-fpm AS php-fpm-nginx
 ARG NGINX_VERSION
 ADD --chmod=644 https://nginx.org/keys/nginx_signing.key /usr/share/keyrings/nginx.asc
 # hadolint ignore=DL3008
@@ -165,36 +131,13 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/nginx.asc] http://nginx.org/package
     && rm -rf /var/lib/apt/lists/*
 COPY --from=s6 /s6/ /
 COPY rootfs/nginx/ rootfs/s6/ /
-
-FROM scratch AS php-fpm-nginx
-# hadolint ignore=DL3067
-COPY --from=php-fpm-nginx-rootfs / /
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    PHPIZE_DEPS="autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c" \
-    PHP_INI_DIR=/usr/local/etc/php \
-    PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_CPPFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_LDFLAGS="-Wl,-O1 -pie"
-STOPSIGNAL SIGQUIT
-ENV APP_ROOT=/app/public \
-    PHP_MEMORY_LIMIT=256M \
-    PHP_UPLOAD_MAX_FILESIZE=32M \
-    PHP_POST_MAX_SIZE=32M \
-    PHP_MAX_EXECUTION_TIME=30 \
-    PHP_FPM_PM=dynamic \
-    PHP_FPM_MAX_CHILDREN=10 \
-    PHP_FPM_START_SERVERS=2 \
-    PHP_FPM_MIN_SPARE_SERVERS=1 \
-    PHP_FPM_MAX_SPARE_SERVERS=3 \
-    PHP_FPM_MAX_REQUESTS=500 \
-    PHP_FPM_REQUEST_TERMINATE_TIMEOUT=60
 ENV PHP_FPM_HOST=127.0.0.1 \
     PHP_FPM_PORT=9000 \
     PHP_FPM_STATUS_ALLOW="127.0.0.1 ::1" \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_KEEP_ENV=1
 WORKDIR /app
-EXPOSE 9000 8080
+EXPOSE 8080
 ENTRYPOINT ["docker-entrypoint.sh", "/init"]
 CMD []
 

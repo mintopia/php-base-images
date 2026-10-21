@@ -24,7 +24,7 @@ PHP 8.6 is best effort while in RC. Extensions that fail to build are dropped (s
 - `install-php-extensions` and `pie` for adding more. No Composer.
 - `php.ini-production` as `php.ini`; opcache on (off for `cli`).
 - `cli` and `frankenphp` are ZTS. `php-fpm` is NTS.
-- Trixie PHP images are flattened to one layer; the upstream build toolchain is removed.
+- Trixie PHP images have the upstream build toolchain removed but keep upstream's layers, so they stay large; use Alpine for small pulls.
 - OCI labels record the base image digest and every upstream version baked in.
 
 ## Ports
