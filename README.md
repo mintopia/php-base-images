@@ -103,6 +103,7 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Daily: rebuild only lanes whose upstream inputs (PHP, OS, nginx, FrankenPHP, s6-overlay, extensions) changed, judged from the labels on the published images.
 - Monthly and `workflow_dispatch` with `force`: rebuild everything.
 - Pull requests: build and smoke-test 8.5 amd64 on both OSes (label `full-build` for all lanes), no publish.
+- Daily cleanup: untagged images older than a day that no tag references are deleted from GHCR, so superseded `@sha256:` digests stop resolving. Pin tags, not digests. Manual runs of `cleanup` default to dry-run.
 
 ### Building PHP from source
 
