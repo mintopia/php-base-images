@@ -49,6 +49,22 @@ All variants:
 
 Setting `PUID` creates user `app` with that UID (and `PGID`, default `PUID`) and runs PHP as it. Nothing is chowned; mounts must already be readable by that user.
 
+### Chaining entrypoints
+
+Executable files in `/docker-entrypoint.d/` run after the built-in entrypoint and before the command, in filename order, as root. Each one is an entrypoint in the chain: do its work, then `exec "$@"` to hand on (a hook that doesn't `exec "$@"` stops the container's command from starting). When `PUID` is set, the drop to `app` happens at the end of the chain, so hooks can still chown or write root-owned files. Images built on images can each add their own hook; filenames must not contain spaces.
+
+```dockerfile
+FROM ghcr.io/mintopia/php:8.5-php-fpm
+COPY --chmod=755 migrate.sh /docker-entrypoint.d/50-migrate
+```
+
+```sh
+#!/bin/sh
+set -e
+php /app/artisan migrate --force
+exec "$@"
+```
+
 php-fpm, php-fpm-nginx:
 
 | Variable | Default |

@@ -64,6 +64,14 @@ case "$target" in
 		[ "$(docker run --rm "$image" id -u)" = 0 ] || fail "default user not root"
 		[ "$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -u):$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -g)" = 1000:1001 ] \
 			|| fail "PUID/PGID not applied"
+		mkdir "$work/hooks"
+		# shellcheck disable=SC2016
+		for h in 10-a 20-b; do
+			printf '#!/bin/sh\nexport HOOKS="${HOOKS:-}%s:$(id -u) "\nexec "$@"\n' "$h" > "$work/hooks/$h"
+		done
+		chmod +x "$work/hooks/"*
+		out=$(docker run --rm -e PUID=1000 -v "$work/hooks:/docker-entrypoint.d:ro" "$image" sh -c 'echo "$HOOKS$(id -u)"')
+		[ "$out" = "10-a:0 20-b:0 1000" ] || fail "entrypoint hooks returned '$out'"
 		;;
 	php-fpm)
 		check_php

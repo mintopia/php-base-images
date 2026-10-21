@@ -44,9 +44,19 @@ if [ -d /etc/nginx/templates ]; then
 fi
 
 case "$1" in
-	php-fpm | nginx | /init) exec "$@" ;;
+	php-fpm | nginx | /init) ;;
+	*) [ "$run_as" = root ] || set -- setpriv --reuid app --regid app --init-groups "$@" ;;
 esac
-if [ "$run_as" = app ]; then
-	exec setpriv --reuid app --regid app --init-groups "$@"
-fi
+
+# chained entrypoints: run as root in name order, each must end with exec "$@"
+# ponytail: word-split, so hook filenames can't contain whitespace
+hooks=
+for hook in /docker-entrypoint.d/*; do
+	if [ -f "$hook" ] && [ -x "$hook" ]; then
+		hooks="$hook $hooks"
+	fi
+done
+for hook in $hooks; do
+	set -- "$hook" "$@"
+done
 exec "$@"
