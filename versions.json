@@ -1,0 +1,48 @@
+{
+  "variable": {
+    "VERSIONS": {
+      "default": {
+        "8.2": {
+          "tag": "8.2",
+          "stable": true,
+          "os": ["alpine", "trixie"],
+          "frankenphp": true,
+          "extensions": ["bcmath", "gd", "grpc", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+        },
+        "8.3": {
+          "tag": "8.3",
+          "stable": true,
+          "os": ["alpine", "trixie"],
+          "frankenphp": true,
+          "extensions": ["bcmath", "gd", "grpc", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+        },
+        "8.4": {
+          "tag": "8.4",
+          "stable": true,
+          "os": ["alpine", "trixie"],
+          "frankenphp": true,
+          "extensions": ["bcmath", "gd", "grpc", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+        },
+        "8.5": {
+          "tag": "8.5",
+          "stable": true,
+          "os": ["alpine", "trixie"],
+          "frankenphp": true,
+          "extensions": ["bcmath", "gd", "grpc", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+        },
+        "8.6": {
+          "tag": "8.6-rc",
+          "stable": false,
+          "os": ["alpine", "trixie"],
+          "frankenphp": false,
+          "extensions": ["bcmath", "gd", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "snmp"],
+          "dropped": {
+            "grpc": "grpc 1.78.1 src/php/ext/grpc calls XtOffsetOf, removed in PHP 8.6",
+            "protobuf": "pie-extensions/protobuf 35.1 calls zval_dtor, removed in PHP 8.6",
+            "redis": "phpredis 6.3.0 calls XtOffsetOf, removed in PHP 8.6; dev-develop builds"
+          }
+        }
+      }
+    }
+  }
+}

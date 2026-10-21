@@ -1,0 +1,202 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "17 4 * * *"
+    - cron: "43 2 1 * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild every lane regardless of upstream changes
+        type: boolean
+        default: false
+      php_version:
+        description: Only this PHP version (versions.json key, e.g. 8.5)
+        type: string
+        default: ""
+      os:
+        description: Only this OS
+        type: choice
+        options: [all, alpine, trixie]
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      lanes: ${{ steps.resolve.outputs.lanes }}
+      merges: ${{ steps.resolve.outputs.merges }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          FULL_BUILD: ${{ contains(github.event.pull_request.labels.*.name, 'full-build') }}
+          FORCE: ${{ inputs.force }}
+          ONLY_PHP: ${{ inputs.php_version }}
+          ONLY_OS: ${{ inputs.os }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          args=()
+          case "$EVENT" in
+            push) args+=(--all) ;;
+            pull_request) args+=(--all); [ "$FULL_BUILD" = true ] || args+=(--php 8.5 --arch amd64) ;;
+            schedule) [ "$SCHEDULE" != "43 2 1 * *" ] || args+=(--all) ;;
+            workflow_dispatch) [ "$FORCE" != true ] || args+=(--all) ;;
+          esac
+          [ -z "$ONLY_PHP" ] || args+=(--php "$ONLY_PHP")
+          [ -z "$ONLY_OS" ] || [ "$ONLY_OS" = all ] || args+=(--os "$ONLY_OS")
+          scripts/resolve-matrix.sh "${args[@]}"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.lanes != '[]'
+    name: build ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.lanes) }}
+    env:
+      PUBLISH: ${{ github.event_name != 'pull_request' }}
+      TARGETS: ${{ matrix.targets }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v4
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bake variables
+        env:
+          VARS: ${{ toJSON(matrix.vars) }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - name: Build
+        env:
+          PUSH: "false"
+        run: |
+          read -ra targets <<<"$TARGETS"
+          docker buildx bake -f docker-bake.hcl -f versions.json --set '*.output=type=docker' --set '*.cache-to=' "${targets[@]}"
+      - name: Smoke test
+        run: |
+          for t in $TARGETS; do
+            tests/smoke.sh "php:$PHP_VERSION-$OS-$t" "$t"
+          done
+      - name: Record PHP version
+        run: |
+          mkdir -p digests
+          docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-cli" -r 'echo PHP_VERSION;' > digests/php-version
+          cat digests/php-version
+      - name: Push by digest
+        if: env.PUBLISH == 'true'
+        env:
+          PUSH: "true"
+        run: |
+          read -ra targets <<<"$TARGETS"
+          sets=()
+          for t in "${targets[@]}"; do
+            name=ghcr.io/mintopia/php
+            [ "$t" != nginx ] || name=ghcr.io/mintopia/nginx
+            sets+=(--set "$t.output=type=image,name=$name,push-by-digest=true,name-canonical=true,push=true")
+          done
+          docker buildx bake -f docker-bake.hcl -f versions.json --set '*.tags=' "${sets[@]}" \
+            --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
+          for t in "${targets[@]}"; do
+            jq -re --arg t "$t" '.[$t]["containerimage.digest"]' meta.json > "digests/$t"
+          done
+      - uses: actions/upload-artifact@v7
+        if: env.PUBLISH == 'true'
+        with:
+          name: digests-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: digests/
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [resolve, build]
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.resolve.outputs.merges != '[]' }}
+    name: merge ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.merges) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: digests-${{ matrix.version }}-${{ matrix.os }}-*
+          path: digests
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest
+        env:
+          VERSION: ${{ matrix.version }}
+          OS: ${{ matrix.os }}
+          VARIANT: ${{ matrix.variant }}
+          STABLE: ${{ matrix.stable }}
+          LATEST: ${{ matrix.latest }}
+        run: |
+          image=ghcr.io/mintopia/php
+          [ "$VARIANT" != nginx ] || image=ghcr.io/mintopia/nginx
+          refs=()
+          php=""
+          for arch in amd64 arm64; do
+            dir="digests/digests-$VERSION-$OS-$arch"
+            refs+=("$image@$(cat "$dir/$VARIANT")")
+            v=$(cat "$dir/php-version")
+            [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
+            php=$v
+          done
+          tags=()
+          while read -r t; do tags+=(-t "$image:$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST")
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"

@@ -1,0 +1,56 @@
+# PHP Base Images
+
+A matrix of PHP container images published to GHCR, replacing mintopia/php-docker and mintopia/php-frankenphp-base.
+
+## Language
+
+**Variant**:
+The runtime shape of an image: `cli`, `php-fpm`, `php-fpm-nginx`, `frankenphp`, or `nginx`. Third component of a tag.
+_Avoid_: type, flavour, target
+
+**Target**:
+The Dockerfile stage that produces one Variant. Build-side name for a Variant.
+
+**OS**:
+The base distribution of an image: `alpine` (latest stable) or `trixie` (Debian slim). Second component of a tag.
+
+**Lane**:
+One (PHP version, OS, architecture) triple. The unit of CI work: one job builds every Target for a Lane.
+
+**Matrix file**:
+The single checked-in file listing supported PHP versions, their stability, their OS list and their extension list. Sole source of truth for what gets built.
+
+**Extension builder**:
+The shared stage that compiles every PHP extension for a Lane once, for all Targets to copy from.
+
+**Bundled extension**:
+An extension shipped in the PHP source tree (bcmath, pcntl, pdo_*, gd, snmp). Installed with the extension installer script.
+
+**PIE extension**:
+An extension distributed via Packagist and installed with PIE (opentelemetry, protobuf, redis). Unofficial Packagist mirrors are acceptable. grpc is the exception: built in-tree against the OS libgrpc.
+
+**Stable**:
+A PHP minor line with a GA release. Only Stable lines receive the `latest`, `8`, and version-less default tags.
+
+**Unstable**:
+A PHP minor line still in RC (currently 8.6). Best effort: extensions that fail to build are dropped, not fixed. Receives the `unstable` tag and its own version tags only.
+_Avoid_: develop
+
+**Default tag component**:
+The value a tag component takes when omitted: version → latest Stable, OS → `alpine`, Variant → `cli`.
+
+**App root**:
+The directory the application is served from, set by `APP_ROOT`. Shared by nginx, php-fpm and FrankenPHP.
+_Avoid_: document root, web root, nginx root
+
+**PUID / PGID**:
+Optional runtime UID and GID the processes run as. Omitted means root. No ownership of mounts is changed on the user's behalf.
+
+**Smoke test**:
+The per-Target check run in a Lane before anything is pushed.
+
+**Upstream check**:
+The daily job that compares published images against upstream (PHP, OS, nginx, FrankenPHP) and triggers rebuilds for changed Lanes.
+
+**Full rebuild**:
+The monthly or manual run that rebuilds every Lane regardless of upstream changes.
