@@ -87,10 +87,22 @@ nginx, php-fpm-nginx:
 |---|---|
 | `PHP_FPM_HOST` | `php-fpm` (nginx), `127.0.0.1` (php-fpm-nginx) |
 | `PHP_FPM_PORT` | `9000` |
+| `NGINX_REAL_IP_FROM` | unset (off), space-separated CIDRs of trusted proxies; client IP is taken from their `NGINX_REAL_IP_HEADER` |
+| `NGINX_REAL_IP_HEADER` | `X-Forwarded-For` |
 | `NGINX_STATUS_PATH` | unset (off), nginx `stub_status` |
 | `PHP_FPM_STATUS_ALLOW` | `127.0.0.1 ::1` (space-separated CIDRs for the status, ping and nginx status paths) |
 
 frankenphp: `SERVER_NAME` (default `:8080`), plus upstream `FRANKENPHP_CONFIG`, `CADDY_GLOBAL_OPTIONS`, `CADDY_EXTRA_CONFIG`, `CADDY_SERVER_EXTRA_DIRECTIVES`.
+
+### Behind a proxy
+
+Without `NGINX_REAL_IP_FROM`, PHP's `REMOTE_ADDR` is whatever connected to nginx: the load balancer, not the user. Set it on the nginx container to the proxy's CIDRs, e.g. User → AWS ALB → nginx → php-fpm:
+
+```
+NGINX_REAL_IP_FROM=10.0.0.0/16   # VPC CIDR or ALB subnets
+```
+
+nginx then takes the rightmost untrusted `X-Forwarded-For` entry as the client and passes it to php-fpm as `REMOTE_ADDR`; php-fpm needs nothing. The status allowlist also checks this client IP. Never trust `0.0.0.0/0` in production: anything reaching the container directly could spoof its IP. FrankenPHP: use Caddy's `trusted_proxies` via `CADDY_GLOBAL_OPTIONS`.
 
 ## Building locally
 

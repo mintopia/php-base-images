@@ -53,11 +53,18 @@ if [ -d /etc/nginx/templates ]; then
 		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${NGINX_STATUS_PATH} { ${allow}deny all; stub_status; }
 "
 	fi
-	export NGINX_STATUS_LOCATIONS
+	NGINX_REAL_IP=
+	for cidr in ${NGINX_REAL_IP_FROM:-}; do
+		NGINX_REAL_IP="${NGINX_REAL_IP}set_real_ip_from ${cidr}; "
+	done
+	if [ -n "$NGINX_REAL_IP" ]; then
+		NGINX_REAL_IP="${NGINX_REAL_IP}real_ip_header ${NGINX_REAL_IP_HEADER:-X-Forwarded-For}; real_ip_recursive on;"
+	fi
+	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/etc/nginx/${template#/etc/nginx/templates/}"
 		# shellcheck disable=SC2016
-		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS}' \
+		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP}' \
 			< "$template" > "${target%.template}"
 	done
 fi

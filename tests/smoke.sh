@@ -101,6 +101,8 @@ case "$target" in
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/nginx_status | grep -q '^Active connections' || fail "nginx status not served locally"
 		addr=$(docker exec "$id" curl -fsS http://127.0.0.1:8080/addr.php)
 		[ "$addr" = 127.0.0.1 ] || fail "IPv4 client seen as '$addr'"
+		addr=$(docker exec "$id" curl -fsS -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:8080/addr.php)
+		[ "$addr" = 127.0.0.1 ] || fail "untrusted X-Forwarded-For honoured: '$addr'"
 		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
 		;;
@@ -111,9 +113,11 @@ case "$target" in
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
-		start /app/public "$image"
+		start /app/public -e NGINX_REAL_IP_FROM='0.0.0.0/0 ::/0' "$image"
 		docker exec "$id" nginx -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
 		http_ok
+		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
+		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
 		;;
 	*)
 		fail "unknown target"
