@@ -31,8 +31,9 @@ PHP 8.6 is best effort while in RC. Extensions that fail to build are dropped (s
 
 | Variant | Listens |
 |---|---|
-| php-fpm | `[::]:9000` |
-| php-fpm-nginx, frankenphp, nginx | `[::]:8080` |
+| php-fpm | `[::]:9000` (`0.0.0.0:9000` without IPv6) |
+| php-fpm-nginx, nginx | `0.0.0.0:8080` + `[::]:8080` (IPv4 only without IPv6) |
+| frankenphp | `:8080` |
 
 ## Environment
 
@@ -86,7 +87,8 @@ nginx, php-fpm-nginx:
 |---|---|
 | `PHP_FPM_HOST` | `php-fpm` (nginx), `127.0.0.1` (php-fpm-nginx) |
 | `PHP_FPM_PORT` | `9000` |
-| `PHP_FPM_STATUS_ALLOW` | `127.0.0.1 ::1` (space-separated CIDRs for the status and ping paths) |
+| `NGINX_STATUS_PATH` | unset (off), nginx `stub_status` |
+| `PHP_FPM_STATUS_ALLOW` | `127.0.0.1 ::1` (space-separated CIDRs for the status, ping and nginx status paths) |
 
 frankenphp: `SERVER_NAME` (default `:8080`), plus upstream `FRANKENPHP_CONFIG`, `CADDY_GLOBAL_OPTIONS`, `CADDY_EXTRA_CONFIG`, `CADDY_SERVER_EXTRA_DIRECTIVES`.
 
