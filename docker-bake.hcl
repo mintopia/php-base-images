@@ -20,6 +20,9 @@ variable "PHP_TAG" {
 
 variable "ALPINE_VERSION" { default = "3" }
 variable "FRANKENPHP_VERSION" { default = "1" }
+variable "FRANKENPHP_SRC_VERSION" { default = "1.13.1" }
+variable "GO_VERSION" { default = "1.27" }
+variable "WATCHER_VERSION" { default = "0.14.5" }
 variable "NGINX_VERSION" { default = "1.30.6" }
 variable "S6_OVERLAY_VERSION" { default = "3.2.3.2" }
 variable "GRPC_VERSION" { default = "" }
@@ -125,7 +128,13 @@ target "frankenphp" {
   inherits   = ["_common"]
   target     = "frankenphp"
   tags       = [tag("frankenphp")]
-  labels     = base_labels("docker.io/dunglas/frankenphp:${FRANKENPHP_VERSION}-php${VERSIONS[PHP_VERSION].tag}-${OS}", FRANKENPHP_DIGEST)
+  labels = merge(
+    php_labels("docker.io/dunglas/frankenphp:${FRANKENPHP_VERSION}-php${VERSIONS[PHP_VERSION].tag}-${OS}", FRANKENPHP_DIGEST),
+    PHP_SOURCE == "src" ? { "net.mintopia.frankenphp.version" = FRANKENPHP_SRC_VERSION } : {},
+  )
+  contexts = merge(php_contexts("zts"), PHP_SOURCE == "src" ? {
+    "dunglas/frankenphp:${FRANKENPHP_VERSION}-php${VERSIONS[PHP_VERSION].tag}-${OS}" = "target:src-frankenphp"
+  } : {})
   cache-from = cache_from("frankenphp")
   cache-to   = cache_to("frankenphp")
 }
@@ -178,6 +187,14 @@ target "src-zts" {
   target     = "zts"
   cache-from = cache_from("src-zts")
   cache-to   = cache_to("src-zts")
+}
+
+target "src-frankenphp" {
+  inherits   = ["_src"]
+  target     = "frankenphp"
+  args       = { FRANKENPHP_SRC_VERSION = FRANKENPHP_SRC_VERSION, GO_VERSION = GO_VERSION, WATCHER_VERSION = WATCHER_VERSION }
+  cache-from = cache_from("src-frankenphp")
+  cache-to   = cache_to("src-frankenphp")
 }
 
 target "src-fpm" {

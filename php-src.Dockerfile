@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
-# PHP built from a php-src git tag; zts/fpm targets are drop-in replacements for php:<ver>-zts-<os> / php:<ver>-fpm-<os>.
+# PHP built from a php-src git tag; zts/fpm/frankenphp targets are drop-in replacements for
+# php:<ver>-zts-<os> / php:<ver>-fpm-<os> / dunglas/frankenphp:<ver>-php<ver>-<os>.
 ARG PHP_TAG
 ARG OS=alpine
 ARG ALPINE_VERSION=3
+ARG GO_VERSION=1.27
 
 FROM --platform=$BUILDPLATFORM debian:trixie-slim AS src
 # hadolint ignore=DL3008
@@ -89,3 +91,30 @@ WORKDIR /var/www/html
 STOPSIGNAL SIGQUIT
 EXPOSE 9000
 CMD ["php-fpm"]
+
+FROM golang:${GO_VERSION}-${OS} AS golang
+
+FROM build-zts AS build-frankenphp
+ARG FRANKENPHP_SRC_VERSION
+ARG WATCHER_VERSION
+COPY --from=golang /usr/local/go /usr/local/go
+ENV PATH=/usr/local/go/bin:$PATH \
+    GOTOOLCHAIN=local
+RUN --mount=type=bind,source=build/frankenphp-src.sh,target=/frankenphp-src.sh \
+    /frankenphp-src.sh
+
+FROM zts AS frankenphp
+COPY --from=build-frankenphp /usr/local/lib/libwatcher* /usr/local/lib/
+COPY --from=build-frankenphp /usr/local/bin/frankenphp /usr/local/bin/
+# hadolint ignore=DL3008,DL3018
+RUN if command -v apk >/dev/null; then apk add --no-cache brotli-libs libcap libstdc++ mailcap; \
+    else apt-get update && apt-get install -y --no-install-recommends libbrotli1 libcap2-bin libstdc++6 mailcap && rm -rf /var/lib/apt/lists/* && ldconfig; fi \
+    && mkdir -p /app/public /config/caddy /data/caddy /etc/caddy /etc/frankenphp \
+    && frankenphp version
+ENV XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data \
+    GODEBUG=cgocheck=0
+WORKDIR /app
+EXPOSE 80 443 443/udp 2019
+HEALTHCHECK CMD ["curl", "-f", "http://localhost:2019/metrics"]
+CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
