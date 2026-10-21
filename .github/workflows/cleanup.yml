@@ -1,0 +1,32 @@
+name: cleanup
+
+on:
+  schedule:
+    - cron: "37 7 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Log what would be deleted without deleting
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      # untagged top-level images only; platform/attestation children of tagged images are kept
+      - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        with:
+          packages: php,nginx
+          delete-untagged: true
+          # in-flight builds push per-arch digests untagged until the merge job tags them
+          older-than: 1 day
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}

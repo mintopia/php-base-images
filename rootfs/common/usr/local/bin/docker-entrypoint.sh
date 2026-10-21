@@ -1,11 +1,17 @@
 #!/bin/sh
 set -e
 
+export APP_ROOT="${APP_ROOT:-/app}"
+export APP_PUBLIC_PATH="${APP_PUBLIC_PATH:-$APP_ROOT/public}"
+if [ -d "$APP_ROOT" ]; then
+	cd "$APP_ROOT"
+fi
+
 run_as=root
 if [ -n "${PUID:-}" ]; then
 	sed -i '/^app:/d' /etc/passwd /etc/group
 	echo "app:x:${PGID:-$PUID}:" >> /etc/group
-	echo "app:x:${PUID}:${PGID:-$PUID}::/app:/sbin/nologin" >> /etc/passwd
+	echo "app:x:${PUID}:${PGID:-$PUID}::${APP_ROOT}:/sbin/nologin" >> /etc/passwd
 	run_as=app
 fi
 export PHP_FPM_USER="$run_as" PHP_FPM_GROUP="$run_as" NGINX_USER="$run_as"
@@ -38,15 +44,25 @@ if [ -d /etc/nginx/templates ]; then
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/etc/nginx/${template#/etc/nginx/templates/}"
 		# shellcheck disable=SC2016
-		envsubst '${APP_ROOT} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS}' \
+		envsubst '${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS}' \
 			< "$template" > "${target%.template}"
 	done
 fi
 
 case "$1" in
-	php-fpm | nginx | /init) exec "$@" ;;
+	php-fpm | nginx | /init) ;;
+	*) [ "$run_as" = root ] || set -- setpriv --reuid app --regid app --init-groups "$@" ;;
 esac
-if [ "$run_as" = app ]; then
-	exec setpriv --reuid app --regid app --init-groups "$@"
-fi
+
+# chained entrypoints: run as root in name order, each must end with exec "$@"
+# ponytail: word-split, so hook filenames can't contain whitespace
+hooks=
+for hook in /docker-entrypoint.d/*; do
+	if [ -f "$hook" ] && [ -x "$hook" ]; then
+		hooks="$hook $hooks"
+	fi
+done
+for hook in $hooks; do
+	set -- "$hook" "$@"
+done
 exec "$@"

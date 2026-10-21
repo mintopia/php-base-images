@@ -51,7 +51,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     xargs apk add --no-cache setpriv < /tmp/runtime-deps \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY rootfs/common/ rootfs/php/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -70,7 +70,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && chmod 1777 /data/caddy /config/caddy
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -90,7 +90,7 @@ RUN --mount=type=bind,from=ext-builder-nts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -131,7 +131,7 @@ ADD https://nginx.org/keys/nginx_signing.rsa.pub /etc/apk/keys/
 RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,2 /etc/alpine-release)" >> /etc/apk/repositories \
     && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst setpriv
 COPY rootfs/common/ rootfs/nginx/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_FPM_HOST=php-fpm \
     PHP_FPM_PORT=9000 \
     PHP_FPM_STATUS_ALLOW="127.0.0.1 ::1" \

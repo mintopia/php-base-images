@@ -41,7 +41,9 @@ check_php() {
 }
 
 start() {
-	docker run -d --name "$id" --network "$id" -p 127.0.0.1::8080 -v "$work/public:/app/public:ro" "$@" >/dev/null
+	local public=$1
+	shift
+	docker run -d --name "$id" --network "$id" -p 127.0.0.1::8080 -v "$work/public:$public:ro" "$@" >/dev/null
 	port=$(docker port "$id" 8080/tcp | head -1 | cut -d: -f2)
 }
 
@@ -64,6 +66,15 @@ case "$target" in
 		[ "$(docker run --rm "$image" id -u)" = 0 ] || fail "default user not root"
 		[ "$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -u):$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -g)" = 1000:1001 ] \
 			|| fail "PUID/PGID not applied"
+		[ "$(docker run --rm "$image" pwd):$(docker run --rm -e APP_ROOT=/tmp "$image" pwd)" = /app:/tmp ] || fail "APP_ROOT not the working directory"
+		mkdir "$work/hooks"
+		# shellcheck disable=SC2016
+		for h in 10-a 20-b; do
+			printf '#!/bin/sh\nexport HOOKS="${HOOKS:-}%s:$(id -u) "\nexec "$@"\n' "$h" > "$work/hooks/$h"
+		done
+		chmod +x "$work/hooks/"*
+		out=$(docker run --rm -e PUID=1000 -v "$work/hooks:/docker-entrypoint.d:ro" "$image" sh -c 'echo "$HOOKS$(id -u)"')
+		[ "$out" = "10-a:0 20-b:0 1000" ] || fail "entrypoint hooks returned '$out'"
 		;;
 	php-fpm)
 		check_php
@@ -80,7 +91,7 @@ case "$target" in
 		;;
 	php-fpm-nginx)
 		check_php
-		start -e PUID=1000 -e PHP_FPM_STATUS_PATH=/status "$image"
+		start /srv/public -e APP_ROOT=/srv -e PUID=1000 -e PHP_FPM_STATUS_PATH=/status "$image"
 		http_ok
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/status | grep -q '^pool:' || fail "status not served locally"
@@ -89,12 +100,12 @@ case "$target" in
 		;;
 	frankenphp)
 		check_php
-		start -e PUID=1000 "$image"
+		start /app/public -e PUID=1000 "$image"
 		http_ok
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
-		start "$image"
+		start /app/public "$image"
 		docker exec "$id" nginx -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
 		http_ok
 		;;
