@@ -84,7 +84,7 @@ case "$target" in
 		http_ok
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/status | grep -q '^pool:' || fail "status not served locally"
-		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done' | sort -u)
+		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
 		;;
 	frankenphp)
