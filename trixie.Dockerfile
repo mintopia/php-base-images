@@ -55,7 +55,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && rm -rf /var/lib/apt/lists/* \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY rootfs/common/ rootfs/php/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -79,7 +79,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && chmod 1777 /data/caddy /config/caddy
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -104,7 +104,7 @@ RUN --mount=type=bind,from=ext-builder-nts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -150,7 +150,7 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/nginx.asc] http://nginx.org/package
     && apt-get install -y --no-install-recommends "nginx=${NGINX_VERSION}-*" gettext-base \
     && rm -rf /var/lib/apt/lists/*
 COPY rootfs/common/ rootfs/nginx/ /
-ENV APP_ROOT=/app/public \
+ENV APP_ROOT=/app \
     PHP_FPM_HOST=php-fpm \
     PHP_FPM_PORT=9000 \
     PHP_FPM_STATUS_ALLOW="127.0.0.1 ::1" \

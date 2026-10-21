@@ -40,7 +40,10 @@ _Avoid_: develop
 The value a tag component takes when omitted: version → latest Stable, OS → `alpine`, Variant → `cli`.
 
 **App root**:
-The directory the application is served from, set by `APP_ROOT`. Shared by nginx, php-fpm and FrankenPHP.
+The application's base directory, set by `APP_ROOT` (default `/app`). The container's working directory.
+
+**Public path**:
+The directory served over HTTP, set by `APP_PUBLIC_PATH` (default `$APP_ROOT/public`). Shared by nginx, php-fpm and FrankenPHP.
 _Avoid_: document root, web root, nginx root
 
 **PUID / PGID**:

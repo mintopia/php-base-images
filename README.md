@@ -40,7 +40,8 @@ All variants:
 
 | Variable | Default |
 |---|---|
-| `APP_ROOT` | `/app/public` |
+| `APP_ROOT` | `/app` (working directory) |
+| `APP_PUBLIC_PATH` | `$APP_ROOT/public` (served by nginx / FrankenPHP) |
 | `PUID`, `PGID` | unset (run as root) |
 | `PHP_MEMORY_LIMIT` | `256M` |
 | `PHP_UPLOAD_MAX_FILESIZE` | `32M` |
