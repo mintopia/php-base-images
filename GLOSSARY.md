@@ -53,7 +53,7 @@ Optional runtime UID and GID the processes run as. Omitted means root. No owners
 The per-Target check run in a Lane before anything is pushed.
 
 **Upstream check**:
-The daily job that compares published images against upstream (PHP, OS, nginx, FrankenPHP) and triggers rebuilds for changed Lanes.
+The daily job that compares published images against upstream (PHP, OS, nginx, FrankenPHP) and scans them for fixable OS-package CVEs, triggering rebuilds for affected Lanes.
 
 **PHP source**:
 Where a Lane's PHP comes from: `src` (compiled from a php-src tag, default) or `upstream` (official `php` images). Set per version in the Matrix file.
