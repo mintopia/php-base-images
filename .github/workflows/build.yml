@@ -24,7 +24,7 @@ on:
         options: [all, alpine, trixie]
         default: all
       php_source:
-        description: Build PHP from upstream php images or php-src tags
+        description: Build PHP from php-src tags (src, default) or official php images (upstream)
         type: choice
         options: [versions.json, upstream, src]
         default: versions.json
