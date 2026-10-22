@@ -7,14 +7,21 @@ if [ -d "$APP_ROOT" ]; then
 	cd "$APP_ROOT"
 fi
 
-run_as=root
+case "${PHP_INI_MODE:=production}" in
+	production) ;;
+	development) export PHPRC="${PHP_INI_DIR:-}/php.ini-development" ;;
+	*) echo "PHP_INI_MODE must be production or development, got '$PHP_INI_MODE'" >&2; exit 1 ;;
+esac
+
+# php-fpm's master stays root and drops pools to these numeric ids; everything else runs via run-as
+export PHP_FPM_USER="${PUID:-root}" PHP_FPM_GROUP="${PGID:-${PUID:-root}}"
+NGINX_USER_DIRECTIVE='user root;'
 if [ -n "${PUID:-}" ]; then
-	sed -i '/^app:/d' /etc/passwd /etc/group
-	echo "app:x:${PGID:-$PUID}:" >> /etc/group
-	echo "app:x:${PUID}:${PGID:-$PUID}::${APP_ROOT}:/sbin/nologin" >> /etc/passwd
-	run_as=app
+	NGINX_USER_DIRECTIVE=
+	# Docker owns the stdio pipes to root here; PUID processes reopening /dev/stdout by path (nginx does) need them
+	chown "$PUID:${PGID:-$PUID}" /proc/self/fd/1 /proc/self/fd/2 2>/dev/null \
+		|| echo "warning: can't chown stdout/stderr to PUID, add CAP_CHOWN if /dev/stdout is opened by path" >&2
 fi
-export PHP_FPM_USER="$run_as" PHP_FPM_GROUP="$run_as" NGINX_USER="$run_as"
 
 if [ -f /proc/net/if_inet6 ]; then
 	PHP_FPM_LISTEN='[::]:9000'
@@ -26,17 +33,12 @@ fi
 export PHP_FPM_LISTEN NGINX_LISTEN
 
 if [ -d /usr/local/etc/php-fpm.d ]; then
-	status_conf=/usr/local/etc/php-fpm.d/zz-status.conf
-	rm -f "$status_conf"
-	if [ -n "${PHP_FPM_STATUS_PATH:-}${PHP_FPM_PING_PATH:-}" ]; then
-		echo '[www]' > "$status_conf"
-		if [ -n "${PHP_FPM_STATUS_PATH:-}" ]; then
-			echo "pm.status_path = $PHP_FPM_STATUS_PATH" >> "$status_conf"
-		fi
-		if [ -n "${PHP_FPM_PING_PATH:-}" ]; then
-			echo "ping.path = $PHP_FPM_PING_PATH" >> "$status_conf"
-		fi
-	fi
+	mkdir -p /run/php-fpm
+	{
+		echo '[www]'
+		[ -z "${PHP_FPM_STATUS_PATH:-}" ] || echo "pm.status_path = $PHP_FPM_STATUS_PATH"
+		[ -z "${PHP_FPM_PING_PATH:-}" ] || echo "ping.path = $PHP_FPM_PING_PATH"
+	} > /run/php-fpm/status.conf
 fi
 
 if [ -d /etc/nginx/templates ]; then
@@ -46,7 +48,7 @@ if [ -d /etc/nginx/templates ]; then
 	done
 	NGINX_STATUS_LOCATIONS=
 	for path in ${PHP_FPM_STATUS_PATH:-} ${PHP_FPM_PING_PATH:-}; do
-		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${path} { ${allow}deny all; include fastcgi_params; fastcgi_param SCRIPT_FILENAME ${path}; fastcgi_pass \$php_fpm; }
+		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${path} { ${allow}deny all; include /etc/nginx/fastcgi_params; fastcgi_param SCRIPT_FILENAME ${path}; fastcgi_pass \$php_fpm; }
 "
 	done
 	if [ -n "${NGINX_STATUS_PATH:-}" ]; then
@@ -66,18 +68,21 @@ if [ -d /etc/nginx/templates ]; then
 		[ -f /proc/net/if_inet6 ] || NGINX_RESOLVER="${NGINX_RESOLVER}ipv6=off "
 		NGINX_RESOLVER="resolver ${NGINX_RESOLVER}valid=10s;"
 	fi
-	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER
+	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER NGINX_USER_DIRECTIVE
+	# rendered under /run so /etc can be read-only; 1777 as nginx may run as PUID and creates its temp dirs here
+	mkdir -p /run/nginx && chmod 1777 /run/nginx
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
-		target="/etc/nginx/${template#/etc/nginx/templates/}"
+		target="/run/nginx/${template#/etc/nginx/templates/}"
+		mkdir -p "$(dirname "$target")"
 		# shellcheck disable=SC2016
-		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP} ${NGINX_RESOLVER}' \
+		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER_DIRECTIVE} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP} ${NGINX_RESOLVER}' \
 			< "$template" > "${target%.template}"
 	done
 fi
 
 case "$1" in
-	php-fpm | nginx | /init) ;;
-	*) [ "$run_as" = root ] || set -- setpriv --reuid app --regid app --init-groups "$@" ;;
+	php-fpm | /init) ;;
+	*) set -- run-as "$@" ;;
 esac
 
 # chained entrypoints: run as root in name order, each must end with exec "$@"

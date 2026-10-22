@@ -1,2 +1,2 @@
 #!/bin/sh
-exec nginx -g "daemon off;"
+exec run-as nginx -e stderr -c /run/nginx/nginx.conf -g "daemon off;"
