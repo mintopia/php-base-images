@@ -95,7 +95,7 @@ These settings apply to the `nginx` image (`ghcr.io/mintopia/nginx`) and to `php
 |---|---|
 | `APP_ROOT`, `APP_PUBLIC_PATH` | as in [Common](#common). nginx serves `APP_PUBLIC_PATH` |
 | `PHP_POST_MAX_SIZE` | `32M`, used as nginx's `client_max_body_size` |
-| `PHP_FPM_HOST` | `php-fpm` in `nginx`, `127.0.0.1` in `php-fpm-nginx` |
+| `PHP_FPM_HOST` | `php-fpm` in `nginx`, `127.0.0.1` in `php-fpm-nginx`. Re-resolved every 10s via the nameservers in `/etc/resolv.conf`, which ignores search domains, so use a FQDN on Kubernetes |
 | `PHP_FPM_PORT` | `9000` |
 | `NGINX_REAL_IP_FROM` | unset, which turns it off. Space-separated CIDRs of trusted proxies |
 | `NGINX_REAL_IP_HEADER` | `X-Forwarded-For` |
