@@ -25,6 +25,9 @@ mkdir -p "$work/public"
 echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
 # shellcheck disable=SC2016
 echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
+# shellcheck disable=SC2016
+echo '<?php echo implode("|", array_map(fn ($k) => $_SERVER[$k] ?? "", ["REMOTE_ADDR", "HTTPS", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED_PROTO", "HTTP_X_FORWARDED_HOST", "HTTP_FORWARDED"]));' > "$work/public/fwd.php"
+spoof=(-H 'X-Forwarded-For: 6.6.6.6, 203.0.113.7' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Host: evil.example' -H 'Forwarded: for=6.6.6.6')
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
 
@@ -119,22 +122,30 @@ case "$target" in
 		[ "$addr" = 127.0.0.1 ] || fail "IPv4 client seen as '$addr'"
 		addr=$(docker exec "$id" curl -fsS -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:8080/addr.php)
 		[ "$addr" = 127.0.0.1 ] || fail "untrusted X-Forwarded-For honoured: '$addr'"
+		fwd=$(docker exec "$id" curl -fsS "${spoof[@]}" http://127.0.0.1:8080/fwd.php)
+		[ "$fwd" = "127.0.0.1||127.0.0.1|http||" ] || fail "untrusted forwarded headers reached PHP: '$fwd'"
 		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
 		;;
 	frankenphp)
 		check_php
 		docker run --rm --cap-drop ALL "$image" frankenphp version >/dev/null || fail "frankenphp under --cap-drop ALL"
-		start /app/public "${hardened[@]}" --tmpfs /data --tmpfs /config --tmpfs /tmp "$image"
+		start /app/public "${hardened[@]}" --tmpfs /data --tmpfs /config --tmpfs /tmp -e TRUSTED_PROXIES='127.0.0.1/32 ::1/128' "$image"
 		http_ok
+		fwd=$(curl -fsS "${spoof[@]}" "http://127.0.0.1:$port/fwd.php")
+		[[ "$fwd" != 203.0.113.7* && "$fwd" == *"||"*"|http||" ]] || fail "untrusted forwarded headers reached PHP: '$fwd'"
+		fwd=$(docker exec "$id" curl -fsS "${spoof[@]}" http://127.0.0.1:8080/fwd.php)
+		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https|evil.example|" ] || fail "trusted proxy headers seen as '$fwd'"
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
-		start /app/public -e NGINX_REAL_IP_FROM='0.0.0.0/0 ::/0' "${hardened[@]}" --tmpfs /run "$image"
+		start /app/public -e TRUSTED_PROXIES='0.0.0.0/0 ::/0' "${hardened[@]}" --tmpfs /run "$image"
 		docker exec -u 1000 "$id" nginx -e stderr -c /run/nginx/nginx.conf -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
 		http_ok
 		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
 		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
+		fwd=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$port/fwd.php")
+		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https||" ] || fail "trusted proxy headers seen as '$fwd'"
 		;;
 	*)
 		fail "unknown target"

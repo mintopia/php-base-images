@@ -120,21 +120,10 @@ These settings apply to the `nginx` image (`ghcr.io/mintopia/nginx`) and to `php
 | `PHP_POST_MAX_SIZE` | `32M`, used as nginx's `client_max_body_size` |
 | `PHP_FPM_HOST` | `php-fpm` in `nginx`, `127.0.0.1` in `php-fpm-nginx`. Re-resolved every 10s via the nameservers in `/etc/resolv.conf`, which ignores search domains, so use a FQDN on Kubernetes |
 | `PHP_FPM_PORT` | `9000` |
-| `NGINX_REAL_IP_FROM` | unset, which turns it off. Space-separated CIDRs of trusted proxies |
-| `NGINX_REAL_IP_HEADER` | `X-Forwarded-For` |
+| `TRUSTED_PROXIES`, `CLIENT_IP_HEADER` | see [Client IP and proxies](#client-ip-and-proxies) |
 | `NGINX_STATUS_PATH` | unset, which turns it off. Serves nginx's `stub_status` page |
 | `PHP_FPM_STATUS_PATH`, `PHP_FPM_PING_PATH` | unset, which turns them off. nginx proxies them to php-fpm |
 | `PHP_FPM_STATUS_ALLOW` | `127.0.0.1 ::1`. Space-separated CIDRs allowed to reach every status and ping path |
-
-#### Behind a proxy
-
-Without `NGINX_REAL_IP_FROM`, PHP gets the address of whatever connected to nginx as `REMOTE_ADDR`. Behind a load balancer, that is the load balancer rather than the user. Set `NGINX_REAL_IP_FROM` on the nginx container to the proxy's CIDRs. For users who reach nginx and php-fpm through an AWS ALB:
-
-```
-NGINX_REAL_IP_FROM=10.0.0.0/16   # VPC CIDR or ALB subnets
-```
-
-nginx then takes the rightmost untrusted `X-Forwarded-For` entry as the client and passes it to php-fpm as `REMOTE_ADDR`. php-fpm needs no change. The status allowlist also checks this client address. Don't trust `0.0.0.0/0` in production, because anything that reaches the container directly could then spoof its address.
 
 ### FrankenPHP
 
@@ -145,18 +134,37 @@ nginx then takes the rightmost untrusted `X-Forwarded-For` entry as the client a
 | `CADDY_GLOBAL_OPTIONS` | unset. Caddy global options |
 | `CADDY_EXTRA_CONFIG` | unset. Extra top-level Caddyfile config |
 | `CADDY_SERVER_EXTRA_DIRECTIVES` | unset. Extra directives in the site block |
+| `TRUSTED_PROXIES`, `CLIENT_IP_HEADER` | see [Client IP and proxies](#client-ip-and-proxies) |
 
 FrankenPHP also imports any `*.caddyfile` files in `/etc/frankenphp/Caddyfile.d/`.
 
-To trust a proxy, set Caddy's `trusted_proxies`. Caddy rejects a block written on one line, so spread it over several lines:
+### Client IP and proxies
 
-```yaml
-environment:
-  CADDY_GLOBAL_OPTIONS: |
-    servers {
-      trusted_proxies static 10.0.0.0/16
-    }
+nginx (`nginx`, `php-fpm-nginx`) and FrankenPHP hand PHP the real client, so apps need no trusted-proxy setup of their own:
+
+| Variable | Default |
+|---|---|
+| `TRUSTED_PROXIES` | unset, which trusts nothing. Space-separated CIDRs of proxies or load balancers in front of the container. `NGINX_REAL_IP_FROM` is still read as an older name |
+| `CLIENT_IP_HEADER` | `X-Forwarded-For`. `NGINX_REAL_IP_HEADER` is still read as an older name |
+
+What PHP sees in `$_SERVER`:
+
+| | Request from a trusted proxy | Any other request |
+|---|---|---|
+| `REMOTE_ADDR` | rightmost untrusted address in `CLIENT_IP_HEADER` | the connecting address |
+| `HTTPS`, `REQUEST_SCHEME` | from `X-Forwarded-Proto` | from the connection |
+| `HTTP_X_FORWARDED_FOR` | the resolved client address | the connecting address |
+| `HTTP_X_FORWARDED_PROTO` | as `REQUEST_SCHEME` | as `REQUEST_SCHEME` |
+| `HTTP_X_FORWARDED_HOST`, `_PORT`, `_PREFIX` | passed through | empty |
+| `HTTP_FORWARDED` | empty | empty |
+
+The client's own `X-Forwarded-*` headers never reach PHP unchecked, so a framework set to trust every proxy (Laravel's `trustProxies(at: '*')`, Symfony's `trusted_proxies: REMOTE_ADDR`) can't be spoofed, and HTTPS behind a TLS-terminating load balancer is detected. For an AWS ALB:
+
 ```
+TRUSTED_PROXIES=10.0.0.0/16   # VPC CIDR or ALB subnets
+```
+
+Don't trust `0.0.0.0/0` in production: anything that reaches the container directly could then spoof its address. The status allowlists check the resolved client address. On FrankenPHP, `TRUSTED_PROXIES` replaces a `servers { trusted_proxies … }` block in `CADDY_GLOBAL_OPTIONS`; setting both stops Caddy starting. `php-fpm` on its own takes `REMOTE_ADDR` and `HTTPS` from whatever sends it FastCGI, such as the `nginx` image.
 
 ## Hardening
 

@@ -31,6 +31,18 @@ else
 fi
 export PHP_FPM_LISTEN NGINX_LISTEN
 
+# NGINX_REAL_IP_* are the older names
+export TRUSTED_PROXIES="${TRUSTED_PROXIES:-${NGINX_REAL_IP_FROM:-}}"
+export CLIENT_IP_HEADER="${CLIENT_IP_HEADER:-${NGINX_REAL_IP_HEADER:-X-Forwarded-For}}"
+# whole block or nothing: Caddy rejects a second servers block, e.g. one from CADDY_GLOBAL_OPTIONS
+CADDY_SERVERS=
+[ -z "$TRUSTED_PROXIES" ] || CADDY_SERVERS="servers {
+trusted_proxies static $TRUSTED_PROXIES
+client_ip_headers $CLIENT_IP_HEADER
+trusted_proxies_strict
+}"
+export CADDY_SERVERS
+
 if [ -d /usr/local/etc/php-fpm.d ]; then
 	mkdir -p /run/php-fpm
 	{
@@ -54,12 +66,15 @@ if [ -d /etc/nginx/templates ]; then
 		NGINX_STATUS_LOCATIONS="${NGINX_STATUS_LOCATIONS}location = ${NGINX_STATUS_PATH} { ${allow}deny all; stub_status; }
 "
 	fi
+	# realip resolves REMOTE_ADDR; $trusted_proxy gates which forwarded headers reach PHP
 	NGINX_REAL_IP=
-	for cidr in ${NGINX_REAL_IP_FROM:-}; do
+	NGINX_TRUSTED_GEO=
+	for cidr in $TRUSTED_PROXIES; do
 		NGINX_REAL_IP="${NGINX_REAL_IP}set_real_ip_from ${cidr}; "
+		NGINX_TRUSTED_GEO="${NGINX_TRUSTED_GEO}${cidr} 1; "
 	done
 	if [ -n "$NGINX_REAL_IP" ]; then
-		NGINX_REAL_IP="${NGINX_REAL_IP}real_ip_header ${NGINX_REAL_IP_HEADER:-X-Forwarded-For}; real_ip_recursive on;"
+		NGINX_REAL_IP="${NGINX_REAL_IP}real_ip_header ${CLIENT_IP_HEADER}; real_ip_recursive on;"
 	fi
 	# re-resolve PHP_FPM_HOST so a restarted php-fpm container's new IP is picked up
 	NGINX_RESOLVER=$(awk '$1 == "nameserver" && $2 !~ /%/ { printf "%s ", ($2 ~ /:/ ? "[" $2 "]" : $2) }' /etc/resolv.conf)
@@ -67,14 +82,14 @@ if [ -d /etc/nginx/templates ]; then
 		[ -f /proc/net/if_inet6 ] || NGINX_RESOLVER="${NGINX_RESOLVER}ipv6=off "
 		NGINX_RESOLVER="resolver ${NGINX_RESOLVER}valid=10s;"
 	fi
-	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER NGINX_USER_DIRECTIVE
+	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_TRUSTED_GEO NGINX_RESOLVER NGINX_USER_DIRECTIVE
 	# rendered under /run so /etc can be read-only; config stays root-owned, only var/ (pid, temp) is writable by PUID
 	mkdir -p /run/nginx/var && chmod 1777 /run/nginx/var
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/run/nginx/${template#/etc/nginx/templates/}"
 		mkdir -p "$(dirname "$target")"
 		# shellcheck disable=SC2016
-		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER_DIRECTIVE} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP} ${NGINX_RESOLVER}' \
+		envsubst '${NGINX_LISTEN} ${APP_PUBLIC_PATH} ${NGINX_USER_DIRECTIVE} ${PHP_FPM_HOST} ${PHP_FPM_PORT} ${PHP_POST_MAX_SIZE} ${NGINX_STATUS_LOCATIONS} ${NGINX_REAL_IP} ${NGINX_TRUSTED_GEO} ${NGINX_RESOLVER}' \
 			< "$template" > "${target%.template}"
 	done
 fi
