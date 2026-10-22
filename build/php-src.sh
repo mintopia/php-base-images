@@ -1,20 +1,16 @@
 #!/bin/sh
 # Builds PHP from /usr/src/php.tar.xz into /usr/local like docker-library/php, writes runtime deps to /runtime-deps.
-# VARIANT=zts: ZTS CLI + embed (FrankenPHP-ready). VARIANT=fpm: FPM (ZTS from 8.6, as upstream).
+# One ZTS build with CLI, embed (FrankenPHP) and FPM; the zts and fpm images both copy it.
 set -eux
 
 id=$(echo "$PHP_VERSION" | awk -F. '{ print $1 * 100 + $2 }')
 
-case "$VARIANT" in
-	zts) set -- --enable-phpdbg --enable-phpdbg-readline --enable-embed ;;
-	fpm) set -- --disable-phpdbg --disable-cgi --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data ;;
-	*) exit 1 ;;
-esac
-if [ "$VARIANT" = zts ] || [ "$id" -ge 806 ]; then
-	set -- "$@" --enable-zts --disable-zend-signals --enable-zend-max-execution-timers
-fi
+set -- --enable-zts --disable-zend-signals --enable-zend-max-execution-timers \
+	--enable-phpdbg --enable-phpdbg-readline --enable-embed \
+	--enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data \
+	--enable-mbstring
 if [ "$id" -lt 806 ]; then
-	set -- "$@" --with-pic --enable-mbstring --with-pear
+	set -- "$@" --with-pic --with-pear
 fi
 
 docker-php-source extract
@@ -61,7 +57,6 @@ make -j "$(nproc)"
 find . -type f -name '*.a' -delete
 make install
 find /usr/local -type f -perm /0111 -exec strip --strip-all {} + 2>/dev/null || true
-make clean
 cp php.ini-* "$PHP_INI_DIR/"
 cd /
 docker-php-source delete
@@ -75,21 +70,15 @@ if [ "$id" -lt 805 ]; then
 fi
 docker-php-ext-enable sodium bcmath pcntl gd pdo_mysql pdo_pgsql pdo_odbc snmp
 
-if [ "$VARIANT" = fpm ]; then
-	cd /usr/local/etc
-	cp php-fpm.conf.default php-fpm.conf
-	cp php-fpm.d/www.conf.default php-fpm.d/www.conf
-	sed -ri 's/^(listen = 127.0.0.1:9000)/;\1/' php-fpm.d/www.conf
-	grep -q '^;listen = 127.0.0.1:9000' php-fpm.d/www.conf
-	printf '[global]\nerror_log = /proc/self/fd/2\nlog_limit = 8192\n\n[www]\naccess.log = /proc/self/fd/2\nclear_env = no\ncatch_workers_output = yes\ndecorate_workers_output = no\nlisten = 9000\n' > php-fpm.d/docker.conf
-	if [ "$id" -lt 806 ]; then
-		printf '[global]\ndaemonize = no\n\n[www]\n' > php-fpm.d/zz-docker.conf
-	else
-		printf '[global]\ndaemonize = no\n' > php-fpm.d/zz-docker.conf
-	fi
-	echo 'fastcgi.logging = Off' > "$PHP_INI_DIR/conf.d/docker-fpm.ini"
-	cd /
-fi
+cd /usr/local/etc
+cp php-fpm.conf.default php-fpm.conf
+cp php-fpm.d/www.conf.default php-fpm.d/www.conf
+sed -ri 's/^(listen = 127.0.0.1:9000)/;\1/' php-fpm.d/www.conf
+grep -q '^;listen = 127.0.0.1:9000' php-fpm.d/www.conf
+printf '[global]\nerror_log = /proc/self/fd/2\nlog_limit = 8192\n\n[www]\naccess.log = /proc/self/fd/2\nclear_env = no\ncatch_workers_output = yes\ndecorate_workers_output = no\nlisten = 9000\n' > php-fpm.d/docker.conf
+printf '[global]\ndaemonize = no\n' > php-fpm.d/zz-docker.conf
+echo 'fastcgi.logging = Off' > "$PHP_INI_DIR/conf.d/docker-fpm.ini"
+cd /
 
 php -m
 if command -v apk >/dev/null; then

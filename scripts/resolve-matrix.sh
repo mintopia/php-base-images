@@ -139,7 +139,13 @@ for key in "${selected[@]}"; do
 		php_tag=$(safe "$("$root/scripts/resolve-php-tag.sh" "$key" "${unstable[@]}")")
 		src_vars=$(jq -c -n --arg t "$php_tag" '{PHP_SOURCE: "src", PHP_TAG: $t}')
 		if [ "$(jq -r .frankenphp <<<"$version")" = true ]; then
-			src_vars=$(jq -c --arg v "$(github_release php/frankenphp)" '. + {FRANKENPHP_SRC_VERSION: $v}' <<<"$src_vars")
+			if [ -z "${frankenphp_src:-}" ]; then
+				fp=$(github_release php/frankenphp)
+				# pins the tarball the build fetches to the one seen here
+				sha=$(safe "$(curl -fsSL --retry 3 "https://github.com/php/frankenphp/archive/refs/tags/v$fp.tar.gz" | sha256sum | cut -d' ' -f1)")
+				frankenphp_src=$(jq -c -n --arg v "$fp" --arg s "$sha" '{FRANKENPHP_SRC_VERSION: $v, FRANKENPHP_SRC_SHA256: $s}')
+			fi
+			src_vars=$(jq -c --argjson fp "$frankenphp_src" '. + $fp' <<<"$src_vars")
 		fi
 	fi
 	for os in alpine trixie; do
