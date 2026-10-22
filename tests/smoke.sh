@@ -114,6 +114,7 @@ case "$target" in
 		http_ok
 		! curl -sI "http://127.0.0.1:$port/" | grep -qi '^x-powered-by' || fail "X-Powered-By sent"
 		! docker logs "$id" 2>&1 | grep -q "\"GET /index.php\" 200" || fail "php-fpm access log duplicates nginx"
+		docker exec -u 1000 "$id" nginx -e stderr -s reload || fail "nginx -s reload"
 		[ "$(status_code /.env)" = 403 ] || fail "dotfile not denied"
 		[ "$(status_code /.well-known-secrets)" = 403 ] || fail ".well-known prefix not denied"
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
