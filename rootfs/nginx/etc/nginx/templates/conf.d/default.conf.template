@@ -1,3 +1,29 @@
+# forwarded headers reach PHP only from TRUSTED_PROXIES; otherwise they describe this connection
+geo $realip_remote_addr $trusted_proxy {
+    default 0;
+    ${NGINX_TRUSTED_GEO}
+}
+map "$trusted_proxy:$http_x_forwarded_proto" $forwarded_proto {
+    "~^1:(?<p>https?)$" $p;
+    default $scheme;
+}
+map $forwarded_proto $forwarded_https {
+    https on;
+    default "";
+}
+map $trusted_proxy $forwarded_host {
+    1 $http_x_forwarded_host;
+    default "";
+}
+map $trusted_proxy $forwarded_port {
+    1 $http_x_forwarded_port;
+    default "";
+}
+map $trusted_proxy $forwarded_prefix {
+    1 $http_x_forwarded_prefix;
+    default "";
+}
+
 server {
     ${NGINX_LISTEN}
     root ${APP_PUBLIC_PATH};
@@ -13,10 +39,22 @@ server {
 
     ${NGINX_STATUS_LOCATIONS}
 
+    location ~ /\.(?!well-known/) {
+        deny all;
+    }
+
     location ~ \.php$ {
         try_files $uri =404;
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        include fastcgi_params;
+        include /etc/nginx/fastcgi_params;
+        fastcgi_param HTTPS $forwarded_https if_not_empty;
+        fastcgi_param REQUEST_SCHEME $forwarded_proto;
+        fastcgi_param HTTP_X_FORWARDED_FOR $remote_addr;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $forwarded_proto;
+        fastcgi_param HTTP_X_FORWARDED_HOST $forwarded_host;
+        fastcgi_param HTTP_X_FORWARDED_PORT $forwarded_port;
+        fastcgi_param HTTP_X_FORWARDED_PREFIX $forwarded_prefix;
+        fastcgi_param HTTP_FORWARDED "";
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
         fastcgi_pass $php_fpm;

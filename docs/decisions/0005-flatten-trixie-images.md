@@ -1,6 +1,6 @@
 # Decision: Trixie PHP images stay layered (flattening rejected)
 
-Status: accepted
+Status: superseded
 Date: 2026-10-21
 
 ## Context

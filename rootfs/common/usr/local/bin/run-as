@@ -1,0 +1,4 @@
+#!/bin/sh
+# runs "$@" as PUID:PGID when PUID is set; numeric ids, so no passwd entry and read-only roots work
+[ -z "${PUID:-}" ] || exec setpriv --reuid "$PUID" --regid "${PGID:-$PUID}" --clear-groups "$@"
+exec "$@"

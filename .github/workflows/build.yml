@@ -96,12 +96,13 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 20
       matrix:
         include: ${{ fromJSON(needs.resolve.outputs.lanes) }}
     env:
       PUBLISH: ${{ github.event_name != 'pull_request' }}
       TARGETS: ${{ matrix.targets }}
+      REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -169,6 +170,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -180,6 +182,7 @@ jobs:
           pattern: digests-${{ matrix.version }}-${{ matrix.os }}-*
           path: digests
       - uses: docker/setup-buildx-action@v4
+      - uses: sigstore/cosign-installer@v3
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -207,3 +210,5 @@ jobs:
           tags=()
           while read -r t; do tags+=(-t "$image:$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST")
           docker buildx imagetools create "${tags[@]}" "${refs[@]}"
+          digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
+          cosign sign --yes "$image@$digest"

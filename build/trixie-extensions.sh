@@ -15,9 +15,7 @@ for ext in $EXTENSIONS; do
 	esac
 done
 
-# shortcut: installer rejects unreleased PHP minors; drop once it lists 8.6
-sed 's/| 805)/| 805 | 806)/' "$(command -v install-php-extensions)" > /tmp/install-php-extensions
-sh /tmp/install-php-extensions $bundled
+install-php-extensions $bundled
 
 apt-get update
 apt-get install -y --no-install-recommends $PHPIZE_DEPS ca-certificates git libgrpc-dev libtool libwebp-dev unzip

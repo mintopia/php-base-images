@@ -63,3 +63,6 @@ PHP compiled from a php-src git tag by `php-src.Dockerfile`, standing in for the
 
 **Full rebuild**:
 The monthly or manual run that rebuilds every Lane regardless of upstream changes.
+
+**Trusted proxy**:
+A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0012.

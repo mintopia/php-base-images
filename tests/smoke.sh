@@ -25,6 +25,9 @@ mkdir -p "$work/public"
 echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
 # shellcheck disable=SC2016
 echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
+# shellcheck disable=SC2016
+echo '<?php echo implode("|", array_map(fn ($k) => $_SERVER[$k] ?? "", ["REMOTE_ADDR", "HTTPS", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED_PROTO", "HTTP_X_FORWARDED_HOST", "HTTP_FORWARDED"]));' > "$work/public/fwd.php"
+spoof=(-H 'X-Forwarded-For: 6.6.6.6, 203.0.113.7' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Host: evil.example' -H 'Forwarded: for=6.6.6.6')
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
 
@@ -58,6 +61,9 @@ http_ok() {
 	[[ "${body:-}" == "PHP 8."* ]] || fail "GET / returned '${body:-}'"
 }
 
+# read-only root plus the documented tmpfs mounts, as PUID with only the caps PUID needs
+hardened=(--read-only --cap-drop ALL --cap-add SETUID --cap-add SETGID -e PUID=1000)
+
 status_code() {
 	curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$1"
 }
@@ -69,6 +75,11 @@ case "$target" in
 		[ "$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -u):$(docker run --rm -e PUID=1000 -e PGID=1001 "$image" id -g)" = 1000:1001 ] \
 			|| fail "PUID/PGID not applied"
 		[ "$(docker run --rm "$image" pwd):$(docker run --rm -e APP_ROOT=/tmp "$image" pwd)" = /app:/tmp ] || fail "APP_ROOT not the working directory"
+		[ "$(docker run --rm "${hardened[@]}" -e PGID=1001 "$image" sh -c 'echo $(id -u):$(id -g)')" = 1000:1001 ] || fail "PUID under --read-only --cap-drop ALL"
+		[ "$(docker run --rm "$image" php -r 'echo ini_get("display_errors");'):$(docker run --rm -e PHP_INI_MODE=development "$image" php -r 'echo ini_get("display_errors");')" = ":1" ] \
+			|| fail "PHP_INI_MODE not applied"
+		! docker run --rm -e PHP_INI_MODE=bogus "$image" true 2>/dev/null || fail "invalid PHP_INI_MODE accepted"
+		[ "$(docker run --rm "$image" php -r 'echo ini_get("expose_php") ?: "off";')" = off ] || fail "expose_php on"
 		mkdir "$work/hooks"
 		# shellcheck disable=SC2016
 		for h in 10-a 20-b; do
@@ -90,11 +101,19 @@ case "$target" in
 		[[ "${out:-}" == *"PHP 8."* && "${out:-}" != *"Status:"* ]] || fail "fastcgi returned '${out:-}'"
 		out=$(docker exec -e SCRIPT_NAME=/status -e SCRIPT_FILENAME=/status -e REQUEST_METHOD=GET "$id" cgi-fcgi -bind -connect 127.0.0.1:9000)
 		[[ "$out" == *"pool:"* ]] || fail "status page returned '$out'"
+		docker rm -f "$id" >/dev/null
+		docker run -d -t --name "$id" "${hardened[@]}" --tmpfs /run --tmpfs /tmp "$image" >/dev/null
+		sleep 3
+		docker logs "$id" 2>&1 | grep -q 'ready to handle connections' || fail "not ready under --read-only"
 		;;
 	php-fpm-nginx)
 		check_php
-		start /srv/public -e APP_ROOT=/srv -e PUID=1000 -e PHP_FPM_STATUS_PATH=/status -e NGINX_STATUS_PATH=/nginx_status "$image"
+		start /srv/public -e APP_ROOT=/srv "${hardened[@]}" --tmpfs /run:exec --tmpfs /tmp -e PHP_FPM_STATUS_PATH=/status -e NGINX_STATUS_PATH=/nginx_status "$image"
 		http_ok
+		! curl -sI "http://127.0.0.1:$port/" | grep -qi '^x-powered-by' || fail "X-Powered-By sent"
+		! docker logs "$id" 2>&1 | grep -q "\"GET /index.php\" 200" || fail "php-fpm access log duplicates nginx"
+		[ "$(status_code /.env)" = 403 ] || fail "dotfile not denied"
+		[ "$(status_code /.well-known-secrets)" = 403 ] || fail ".well-known prefix not denied"
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/status | grep -q '^pool:' || fail "status not served locally"
 		[ "$(status_code /nginx_status)" = 403 ] || fail "nginx status not restricted"
@@ -103,21 +122,30 @@ case "$target" in
 		[ "$addr" = 127.0.0.1 ] || fail "IPv4 client seen as '$addr'"
 		addr=$(docker exec "$id" curl -fsS -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:8080/addr.php)
 		[ "$addr" = 127.0.0.1 ] || fail "untrusted X-Forwarded-For honoured: '$addr'"
+		fwd=$(docker exec "$id" curl -fsS "${spoof[@]}" http://127.0.0.1:8080/fwd.php)
+		[ "$fwd" = "127.0.0.1||127.0.0.1|http||" ] || fail "untrusted forwarded headers reached PHP: '$fwd'"
 		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
 		;;
 	frankenphp)
 		check_php
-		start /app/public -e PUID=1000 "$image"
+		docker run --rm --cap-drop ALL "$image" frankenphp version >/dev/null || fail "frankenphp under --cap-drop ALL"
+		start /app/public "${hardened[@]}" --tmpfs /data --tmpfs /config --tmpfs /tmp -e TRUSTED_PROXIES='127.0.0.1/32 ::1/128' "$image"
 		http_ok
+		fwd=$(curl -fsS "${spoof[@]}" "http://127.0.0.1:$port/fwd.php")
+		[[ "$fwd" != 203.0.113.7* && "$fwd" == *"||"*"|http||" ]] || fail "untrusted forwarded headers reached PHP: '$fwd'"
+		fwd=$(docker exec "$id" curl -fsS "${spoof[@]}" http://127.0.0.1:8080/fwd.php)
+		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https|evil.example|" ] || fail "trusted proxy headers seen as '$fwd'"
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
-		start /app/public -e NGINX_REAL_IP_FROM='0.0.0.0/0 ::/0' "$image"
-		docker exec "$id" nginx -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
+		start /app/public -e TRUSTED_PROXIES='0.0.0.0/0 ::/0' "${hardened[@]}" --tmpfs /run "$image"
+		docker exec -u 1000 "$id" nginx -e stderr -c /run/nginx/nginx.conf -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
 		http_ok
 		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
 		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
+		fwd=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$port/fwd.php")
+		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https||" ] || fail "trusted proxy headers seen as '$fwd'"
 		;;
 	*)
 		fail "unknown target"
