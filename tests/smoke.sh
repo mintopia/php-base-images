@@ -27,6 +27,8 @@ echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
 echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
 # shellcheck disable=SC2016
 echo '<?php echo implode("|", array_map(fn ($k) => $_SERVER[$k] ?? "", ["REMOTE_ADDR", "HTTPS", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED_PROTO", "HTTP_X_FORWARDED_HOST", "HTTP_FORWARDED"]));' > "$work/public/fwd.php"
+# shellcheck disable=SC2016
+echo '<?php echo implode(" ", array_keys(array_filter($_SERVER, fn ($v, $k) => $v === "" && str_starts_with($k, "HTTP_"), ARRAY_FILTER_USE_BOTH)));' > "$work/public/empty.php"
 spoof=(-H 'X-Forwarded-For: 6.6.6.6, 203.0.113.7' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Host: evil.example' -H 'Forwarded: for=6.6.6.6')
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
@@ -146,6 +148,8 @@ case "$target" in
 		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
 		fwd=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$port/fwd.php")
 		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https||" ] || fail "trusted proxy headers seen as '$fwd'"
+		empty=$(curl -fsS "http://127.0.0.1:$port/empty.php")
+		[ -z "$empty" ] || fail "empty headers reached PHP: $empty"
 		;;
 	*)
 		fail "unknown target"
