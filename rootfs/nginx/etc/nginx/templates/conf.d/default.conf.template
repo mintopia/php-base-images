@@ -13,7 +13,7 @@ server {
 
     ${NGINX_STATUS_LOCATIONS}
 
-    location ~ /\.(?!well-known) {
+    location ~ /\.(?!well-known/) {
         deny all;
     }
 

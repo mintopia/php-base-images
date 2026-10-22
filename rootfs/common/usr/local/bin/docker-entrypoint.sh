@@ -18,9 +18,8 @@ export PHP_FPM_USER="${PUID:-root}" PHP_FPM_GROUP="${PGID:-${PUID:-root}}"
 NGINX_USER_DIRECTIVE='user root;'
 if [ -n "${PUID:-}" ]; then
 	NGINX_USER_DIRECTIVE=
-	# Docker owns the stdio pipes to root here; PUID processes reopening /dev/stdout by path (nginx does) need them
-	chown "$PUID:${PGID:-$PUID}" /proc/self/fd/1 /proc/self/fd/2 2>/dev/null \
-		|| echo "warning: can't chown stdout/stderr to PUID, add CAP_CHOWN if /dev/stdout is opened by path" >&2
+	# stdio is root-owned 0600; PUID processes reopen /dev/stdout by path (nginx does). chmod, not chown: root keeps access without DAC_OVERRIDE
+	chmod a+w /proc/self/fd/1 /proc/self/fd/2 2>/dev/null || true
 fi
 
 if [ -f /proc/net/if_inet6 ]; then
@@ -69,9 +68,8 @@ if [ -d /etc/nginx/templates ]; then
 		NGINX_RESOLVER="resolver ${NGINX_RESOLVER}valid=10s;"
 	fi
 	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER NGINX_USER_DIRECTIVE
-	# rendered under /run so /etc can be read-only; config stays root-owned, only var/ (pid, temp) is PUID-writable
-	mkdir -p /run/nginx/var
-	[ -z "${PUID:-}" ] || chown "$PUID:${PGID:-$PUID}" /run/nginx/var
+	# rendered under /run so /etc can be read-only; config stays root-owned, only var/ (pid, temp) is writable by PUID
+	mkdir -p /run/nginx/var && chmod 1777 /run/nginx/var
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/run/nginx/${template#/etc/nginx/templates/}"
 		mkdir -p "$(dirname "$target")"

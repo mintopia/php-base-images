@@ -160,7 +160,7 @@ environment:
 
 ## Hardening
 
-Every image can run with a read-only root filesystem and no capabilities. Mount writable tmpfs where the Variant needs it. When `PUID` is set, add back `SETUID` and `SETGID` to switch user, and `CHOWN` so that it can write to `/dev/stdout`, which nginx needs:
+Every image can run with a read-only root filesystem and no capabilities. Mount writable tmpfs where the Variant needs it. When `PUID` is set, add back `SETUID` and `SETGID` to switch user:
 
 | Variant | tmpfs |
 |---|---|
@@ -172,7 +172,7 @@ Every image can run with a read-only root filesystem and no capabilities. Mount 
 
 ```
 docker run --read-only --tmpfs /run:exec --tmpfs /tmp \
-  --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
+  --cap-drop ALL --cap-add SETUID --cap-add SETGID \
   -e PUID=1000 ghcr.io/mintopia/php:8.5-php-fpm-nginx
 ```
 

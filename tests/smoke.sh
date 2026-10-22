@@ -59,7 +59,7 @@ http_ok() {
 }
 
 # read-only root plus the documented tmpfs mounts, as PUID with only the caps PUID needs
-hardened=(--read-only --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN -e PUID=1000)
+hardened=(--read-only --cap-drop ALL --cap-add SETUID --cap-add SETGID -e PUID=1000)
 
 status_code() {
 	curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$1"
@@ -99,7 +99,7 @@ case "$target" in
 		out=$(docker exec -e SCRIPT_NAME=/status -e SCRIPT_FILENAME=/status -e REQUEST_METHOD=GET "$id" cgi-fcgi -bind -connect 127.0.0.1:9000)
 		[[ "$out" == *"pool:"* ]] || fail "status page returned '$out'"
 		docker rm -f "$id" >/dev/null
-		docker run -d --name "$id" "${hardened[@]}" --tmpfs /run --tmpfs /tmp "$image" >/dev/null
+		docker run -d -t --name "$id" "${hardened[@]}" --tmpfs /run --tmpfs /tmp "$image" >/dev/null
 		sleep 3
 		docker logs "$id" 2>&1 | grep -q 'ready to handle connections' || fail "not ready under --read-only"
 		;;
@@ -109,6 +109,7 @@ case "$target" in
 		http_ok
 		! curl -sI "http://127.0.0.1:$port/" | grep -qi '^x-powered-by' || fail "X-Powered-By sent"
 		[ "$(status_code /.env)" = 403 ] || fail "dotfile not denied"
+		[ "$(status_code /.well-known-secrets)" = 403 ] || fail ".well-known prefix not denied"
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
 		docker exec "$id" curl -fsS http://127.0.0.1:8080/status | grep -q '^pool:' || fail "status not served locally"
 		[ "$(status_code /nginx_status)" = 403 ] || fail "nginx status not restricted"
