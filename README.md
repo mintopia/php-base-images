@@ -2,13 +2,21 @@
 
 Multi-arch (amd64, arm64) PHP images for Alpine and Debian trixie, published to `ghcr.io/mintopia/php`, with a matching nginx image at `ghcr.io/mintopia/nginx`. They replace `mintopia/php-docker` and `mintopia/php-frankenphp-base`.
 
+- [Tags](#tags) and [Images](#images)
+- [What's inside](#whats-inside)
+- [Configuration](#configuration): [Common](#common), [php-fpm](#php-fpm), [nginx](#nginx), [FrankenPHP](#frankenphp), [Client IP and proxies](#client-ip-and-proxies)
+- [Logs](#logs)
+- [Hardening](#hardening)
+- [Development](#development): [Xdebug](#xdebug), [one request per worker](#one-request-per-worker), [reloading FrankenPHP workers](#reloading-frankenphp-workers-on-file-changes)
+- [Building locally](#building-locally) and [CI](#ci)
+
 ## Tags
 
 Tags take the form `<version>-<os>-<variant>`. An omitted component takes its default, which is the latest stable PHP for version, `alpine` for os, and `cli` for variant.
 
 | Component | Values |
 |---|---|
-| version | `8`, `8.2`, `8.3`, `8.4`, `8.5`, `8.6`, full `8.5.11`, RC `8.6-rc3` |
+| version | `8`, `8.2`, `8.3`, `8.4`, `8.5`, `8.6`, a full version such as `8.5.12`, or an RC such as `8.6-rc4` |
 | os | `alpine`, `trixie` |
 | variant | `cli`, `php-fpm`, `php-fpm-nginx`, `frankenphp` |
 
@@ -140,31 +148,61 @@ FrankenPHP also imports any `*.caddyfile` files in `/etc/frankenphp/Caddyfile.d/
 
 ### Client IP and proxies
 
-nginx (`nginx`, `php-fpm-nginx`) and FrankenPHP hand PHP the real client, so apps need no trusted-proxy setup of their own:
+This applies to `nginx`, `php-fpm-nginx` and `frankenphp`. The web server works out the real client and scheme and hands them to PHP, so apps don't need a trusted-proxy setup of their own.
 
 | Variable | Default |
 |---|---|
-| `TRUSTED_PROXIES` | unset, which trusts nothing. Space-separated CIDRs of proxies or load balancers in front of the container. `NGINX_REAL_IP_FROM` is still read as an older name |
-| `CLIENT_IP_HEADER` | `X-Forwarded-For`. `NGINX_REAL_IP_HEADER` is still read as an older name |
+| `TRUSTED_PROXIES` | unset, which trusts nothing. Space-separated CIDRs of the proxies or load balancers in front of the container |
+| `CLIENT_IP_HEADER` | `X-Forwarded-For`. The header a trusted proxy puts the client address in |
 
-What PHP sees in `$_SERVER`:
+`NGINX_REAL_IP_FROM` and `NGINX_REAL_IP_HEADER` are still read as older names for these.
 
-| | Request from a trusted proxy | Any other request |
+A request is from a trusted proxy when the address connecting to the container is in `TRUSTED_PROXIES`. Only then are forwarded headers believed. Anyone else can send `X-Forwarded-*` headers, so for them PHP sees the connection as it is:
+
+| `$_SERVER` | From a trusted proxy | From anything else |
 |---|---|---|
-| `REMOTE_ADDR` | rightmost untrusted address in `CLIENT_IP_HEADER` | the connecting address |
+| `REMOTE_ADDR` | the client, the rightmost untrusted address in `CLIENT_IP_HEADER` | the connecting address |
 | `HTTPS`, `REQUEST_SCHEME` | from `X-Forwarded-Proto` | from the connection |
-| `HTTP_X_FORWARDED_FOR` | the resolved client address | the connecting address |
-| `HTTP_X_FORWARDED_PROTO` | as `REQUEST_SCHEME` | as `REQUEST_SCHEME` |
+| `HTTP_X_FORWARDED_FOR` | the same as `REMOTE_ADDR` | the same as `REMOTE_ADDR` |
+| `HTTP_X_FORWARDED_PROTO` | the same as `REQUEST_SCHEME` | the same as `REQUEST_SCHEME` |
 | `HTTP_X_FORWARDED_HOST`, `_PORT`, `_PREFIX` | passed through | empty |
 | `HTTP_FORWARDED` | empty | empty |
 
-The client's own `X-Forwarded-*` headers never reach PHP unchecked, so a framework set to trust every proxy (Laravel's `trustProxies(at: '*')`, Symfony's `trusted_proxies: REMOTE_ADDR`) can't be spoofed, and HTTPS behind a TLS-terminating load balancer is detected. For an AWS ALB:
+Because the client's own headers never reach PHP unchecked, a framework set to trust every proxy can't be spoofed. Laravel's `trustProxies(at: '*')` and Symfony's `trusted_proxies: REMOTE_ADDR` are both safe, and HTTPS behind a load balancer that terminates TLS is detected. Taking the rightmost untrusted address means a client can't pick its own address by sending a fake `X-Forwarded-For`, even when the proxy appends to it.
 
-```
-TRUSTED_PROXIES=10.0.0.0/16   # VPC CIDR or ALB subnets
-```
+Common setups:
 
-Don't trust `0.0.0.0/0` in production: anything that reaches the container directly could then spoof its address. The status allowlists check the resolved client address. On FrankenPHP, `TRUSTED_PROXIES` replaces a `servers { trusted_proxies … }` block in `CADDY_GLOBAL_OPTIONS`; setting both stops Caddy starting. `php-fpm` on its own takes `REMOTE_ADDR` and `HTTPS` from whatever sends it FastCGI, such as the `nginx` image.
+| In front of the container | Set |
+|---|---|
+| Nothing; clients connect directly | nothing |
+| AWS ALB, or another load balancer in a private network | `TRUSTED_PROXIES=10.0.0.0/16`, the VPC CIDR or the load balancer's subnets |
+| Traefik, Caddy or nginx on the same Docker network | `TRUSTED_PROXIES=172.16.0.0/12`, or the network's subnet |
+| Kubernetes ingress controller | the pod CIDR, for example `TRUSTED_PROXIES=10.244.0.0/16` |
+| Cloudflare, straight to the container | Cloudflare's published IP ranges in `TRUSTED_PROXIES`, and `CLIENT_IP_HEADER=CF-Connecting-IP` |
+
+With several proxies in a chain, such as Cloudflare in front of a load balancer, list every hop's range.
+
+Don't trust `0.0.0.0/0` in production: anything that can reach the container directly could then claim any address and scheme. The status and ping allowlists check the resolved client address.
+
+`php-fpm` on its own has no HTTP side. It takes `REMOTE_ADDR` and `HTTPS` from whatever sends it FastCGI, such as the `nginx` image, so set `TRUSTED_PROXIES` there.
+
+On FrankenPHP, `TRUSTED_PROXIES` adds a `servers` block to Caddy's global options. If `CADDY_GLOBAL_OPTIONS` already has one, as older versions of this README suggested, Caddy won't start with both. Move the CIDRs into `TRUSTED_PROXIES` and remove the block.
+
+## Logs
+
+Everything goes to the container's stdout and stderr, so `docker logs` shows it all. Nothing is written to files inside the container.
+
+| Variant | stdout | stderr |
+|---|---|---|
+| `cli` | the script's output | PHP errors and warnings |
+| `php-fpm` | nothing | php-fpm's log, one access line per request, and anything workers write to stderr, including PHP errors |
+| `php-fpm-nginx` | nginx's access log | nginx's error log, php-fpm's log and PHP errors. php-fpm's access log is off, since nginx already logs each request |
+| `nginx` | nginx's access log | nginx's error log |
+| `frankenphp` | nothing | Caddy and FrankenPHP's JSON log, with PHP errors as JSON entries |
+
+php-fpm prefixes PHP errors with `NOTICE: PHP message:` and cuts lines off at 8192 bytes.
+
+FrankenPHP writes no access log by default. Set `CADDY_SERVER_EXTRA_DIRECTIVES=log` to add one, as JSON on stderr.
 
 ## Hardening
 
@@ -212,11 +250,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-Xdebug doesn't support PHP 8.6 yet, and `install-php-extensions` refuses 8.6 until it is released.
+Configure Xdebug with an `.ini` file in `/usr/local/etc/php/conf.d/`, either copied into the image or mounted:
 
-Xdebug has no release for PHP 8.6 yet. On 8.6, which has no PEAR, `install-php-extensions` can't fetch PECL extensions, so use `pie install <vendor>/<package>` for those that support 8.6, adding `unzip` alongside `$PHPIZE_DEPS`.
+```ini
+xdebug.mode=debug
+xdebug.client_host=host.docker.internal
+xdebug.start_with_request=trigger
+```
 
-Configure it with `PHP_INI_SCAN_DIR` or a file in `/usr/local/etc/php/conf.d/`, for example `xdebug.mode=debug` and `xdebug.client_host=host.docker.internal`.
+On Linux, `host.docker.internal` needs `--add-host=host.docker.internal:host-gateway`.
+
+Xdebug has no release for PHP 8.6 yet. 8.6 also has no PEAR, so `install-php-extensions` can't fetch PECL extensions there. Use `pie install <vendor>/<package>` for extensions that support 8.6, installing `unzip` along with `$PHPIZE_DEPS` on trixie.
 
 ### One request per worker
 
