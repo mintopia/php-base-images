@@ -1,0 +1,60 @@
+---
+import '../styles/site.css';
+import { versionKeys, repoUrl } from '../lib/data';
+
+interface Props {
+  title: string;
+  description: string;
+  current: 'builder' | 'images' | 'matrix' | 'usage' | 'changelog';
+}
+const { title, description, current } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const nav = [
+  ['builder', 'Builder', base],
+  ['images', 'Images', `${base}images/`],
+  ['matrix', 'Matrix', `${base}matrix/`],
+  ['usage', 'Usage', `${base}usage/`],
+  ['changelog', 'Changelog', `${base}changelog/`],
+] as const;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href={base}>
+        <span class="brand-lines" aria-hidden="true">
+          {versionKeys.map((v) => <i data-line={v} style="background: var(--line)" />)}
+        </span>
+        mintopia/php
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        {nav.map(([id, label, href]) => <a href={href} aria-current={id === current ? 'page' : undefined}>{label}</a>)}
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <span>Multi-arch PHP images on <code>ghcr.io/mintopia</code>, signed with cosign.</span>
+      <a href={repoUrl}>Source on GitHub</a>
+    </footer>
+    <script>
+      document.addEventListener('click', async (e) => {
+        const btn = (e.target as Element).closest<HTMLButtonElement>('[data-copy]');
+        if (!btn) return;
+        await navigator.clipboard.writeText(btn.dataset.copy!);
+        btn.dataset.copied = '';
+        setTimeout(() => delete btn.dataset.copied, 1400);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+---
+import Bullet from './Bullet.astro';
+import { type Image, fmtTime, shortDigest, commitUrl, buildPath } from '../lib/data';
+
+interface Props { img: Image; current?: string }
+const { img, current } = Astro.props;
+const php = img.variant !== 'nginx';
+---
+{img.builds.length === 0 ? (
+  <p class="muted empty">No builds recorded yet. History starts with the next published build.</p>
+) : (
+  <div class="table-wrap">
+    <table class="timetable">
+      <thead><tr><th>Built (UTC)</th>{php && <th>PHP</th>}<th>Change</th><th class="wide">Digest</th><th class="wide">Commit</th><th>Status</th></tr></thead>
+      <tbody>
+        {img.builds.map((b) => (
+          <tr class:list={{ live: b.live, here: b.digest === current }}>
+            <td class="mono"><a href={buildPath(img, b)} aria-current={b.digest === current ? 'page' : undefined}>{fmtTime(b.time)}</a></td>
+            {php && <td class="mono">{b.php}</td>}
+            <td><div class="changes">
+              {b.changes.map((c) => c.kind === 'php'
+                ? <span class="php-change"><Bullet version={img.version} size="sm" />{c.text.replace(/^PHP /, '')}</span>
+                : c.kind === 'component'
+                ? <span class="chip">{c.text}</span>
+                : <span class="muted">{c.text}</span>)}
+            </div></td>
+            <td class="mono muted wide" title={b.digest}>{shortDigest(b.digest)}</td>
+            <td class="mono wide">{b.commit ? <a href={commitUrl(b.commit)}>{b.commit.slice(0, 7)}</a> : <span class="muted">—</span>}</td>
+            <td>{b.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}

@@ -1,0 +1,98 @@
+---
+import Base from '../../../layouts/Base.astro';
+import Bullet from '../../../components/Bullet.astro';
+import Copy from '../../../components/Copy.astro';
+import Timetable from '../../../components/Timetable.astro';
+import Facts from '../../../components/Facts.astro';
+import { images, type Image, type Build, ARCHES, fmtTime, shortDigest, commitUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
+
+export function getStaticPaths() {
+  return images.flatMap((img) =>
+    img.builds.map((b, i) => ({
+      params: { id: img.id, build: shortDigest(b.digest) },
+      props: { img, b, newer: img.builds[i - 1] ?? null, older: img.builds[i + 1] ?? null },
+    })),
+  );
+}
+const { img, b, newer, older } = Astro.props as { img: Image; b: Build; newer: Build | null; older: Build | null };
+const base = import.meta.env.BASE_URL;
+const pinned = b.live ? `${img.repo}:${img.tag}@${b.digest}` : `${img.repo}@${b.digest}`;
+const run = runUrl(b.run);
+---
+<Base title={`${img.tag} · ${fmtTime(b.time)} · mintopia/php`} description={`Build of ${img.repo}:${img.tag} on ${fmtTime(b.time)} UTC, digest ${shortDigest(b.digest)}.`} current="images">
+  <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
+    <div class="dest-band">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href={`${base}images/`}>Images</a><span>/</span><a href={imagePath(img)}>{img.tag}</a><span>/</span><span aria-current="page">{shortDigest(b.digest)}</span>
+      </nav>
+      <div class="dest">
+        {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
+        <h1><small>{img.repo} · built {fmtTime(b.time)} UTC</small>{img.tag}</h1>
+        <Copy text={pinned} label="Copy pinned reference" primary />
+      </div>
+      <p class="tracks">
+        {b.live ? <span class="status">Live</span> : <span class="status old">Superseded {newer && <>on {fmtTime(newer.time)} by <a href={buildPath(img, newer)}>{shortDigest(newer.digest)}</a></>}</span>}
+        <span class="muted">· tagged</span>
+        {b.tags.map((t) => <code class="chip">{t}</code>)}
+      </p>
+      {!b.live && <p class="note">Tags have moved on from this build. GHCR removes a replaced digest a day later unless a version tag such as <code>{b.tags[0]}</code> still points at it.</p>}
+    </div>
+
+    <div class="detail">
+      <div>
+        <h2>References</h2>
+        <dl class="refs">
+          <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
+          {ARCHES.map((a) => b.platforms[a] && (
+            <div><dt>{a} only</dt><dd><code>{img.repo}@{b.platforms[a]}</code></dd><Copy text={`${img.repo}@${b.platforms[a]}`} /></div>
+          ))}
+        </dl>
+
+        <h2>What changed</h2>
+        <ul class="change-list">
+          {b.changes.map((c) => <li>{c.text}</li>)}
+          {older && <li class="muted">Compared with <a href={buildPath(img, older)}>{fmtTime(older.time)}</a></li>}
+        </ul>
+
+        <h2>Provenance</h2>
+        <dl class="refs">
+          <div><dt>Commit</dt><dd>{b.commit ? <a class="mono" href={commitUrl(b.commit)}>{b.commit}</a> : <span class="muted">not recorded</span>}</dd></div>
+          <div><dt>Workflow run</dt><dd>{run ? <a href={run}>{b.run}</a> : <span class="muted">recorded from GHCR after publishing</span>}</dd></div>
+          <div><dt>Index digest</dt><dd><code>{b.digest}</code></dd></div>
+        </dl>
+
+        {b.modules && b.modules.length > 0 && (
+          <>
+            <h2>PHP modules <span class="muted count">{b.modules.length}</span></h2>
+            <p class="modules">{b.modules.map((m) => <code class:list={['chip', { added: isAddedExtension(m) }]}>{m}</code>)}</p>
+            <p class="note">Highlighted modules are added by these images; the rest are built into PHP.</p>
+          </>
+        )}
+
+        <h2>Labels</h2>
+        <div class="table-wrap">
+          <table class="labels">
+            <tbody>
+              {Object.entries(b.labels).sort(([x], [y]) => x.localeCompare(y)).map(([k, v]) => (
+                <tr><th scope="row" class="mono">{k}</th><td class="mono">{v}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <aside>
+        <h2>On board</h2>
+        <Facts build={b} />
+        <nav class="build-nav" aria-label="Builds">
+          {older ? <a href={buildPath(img, older)}><span class="muted">Older</span>{fmtTime(older.time)}</a> : <span />}
+          {newer ? <a href={buildPath(img, newer)}><span class="muted">Newer</span>{fmtTime(newer.time)}</a> : <span />}
+        </nav>
+      </aside>
+    </div>
+
+    <div class="page all-builds">
+      <h2>Every build of <span class="tag-name">{img.tag}</span></h2>
+      <Timetable img={img} current={b.digest} />
+    </div>
+  </div>
+</Base>

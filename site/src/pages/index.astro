@@ -1,0 +1,161 @@
+---
+import Base from '../layouts/Base.astro';
+import Bullet from '../components/Bullet.astro';
+import Copy from '../components/Copy.astro';
+import Timetable from '../components/Timetable.astro';
+import Facts from '../components/Facts.astro';
+import { images, versions, versionKeys, latestStable, VARIANTS, OSES, ARCHES, imagePath } from '../lib/data';
+
+const start = { v: latestStable, os: 'alpine', variant: 'cli', arch: 'amd64' };
+const startId = `${start.v}-${start.os}-${start.variant}`;
+const unstable = versionKeys.filter((v) => !versions[v].stable);
+---
+<Base title="mintopia/php · PHP base images" description="Pick a PHP version, OS, variant and architecture to get the exact image reference and its build history." current="builder">
+  <div class="builder lined" id="builder" data-line={start.v} data-arch={start.arch}>
+    <form class="board" id="picker" aria-label="Choose an image">
+      <fieldset class="field" id="line-field">
+        <legend>PHP{unstable.length > 0 && <span class="muted"> · {unstable.join(', ')} is a release candidate</span>}</legend>
+        <div class="lines">
+          {versionKeys.map((v) => (
+            <label class="line-pick" title={versions[v].stable ? `PHP ${v}` : `PHP ${v} release candidate`}>
+              <input type="radio" name="v" value={v} checked={v === start.v} data-frankenphp={String(versions[v].frankenphp)} />
+              <Bullet version={v} />
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>OS</legend>
+        <div class="seg">{OSES.map((o) => <label><input type="radio" name="os" value={o} checked={o === start.os} />{o}</label>)}</div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>Variant</legend>
+        <div class="seg">{[...VARIANTS, 'nginx'].map((t) => <label><input type="radio" name="variant" value={t} checked={t === start.variant} />{t}</label>)}</div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>Architecture</legend>
+        <div class="seg">{ARCHES.map((a) => <label><input type="radio" name="arch" value={a} checked={a === start.arch} />{a}</label>)}</div>
+      </fieldset>
+    </form>
+
+    {images.map((img) => {
+      const ref = `${img.repo}:${img.tag}`;
+      const cur = img.current;
+      const aliases = img.tags.filter((t) => t !== img.tag);
+      return (
+        <section class="image" data-image={img.id} hidden={img.id !== startId} aria-label={ref}>
+          <div class="dest-band">
+            <div class="dest">
+              {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
+              <h1><small>{img.repo}</small><span class="tag">{img.tag}</span></h1>
+              <Copy text={ref} label="Copy reference" primary />
+            </div>
+            {aliases.length > 0 && (
+              <p class="tracks"><span class="muted">Also tagged</span>{aliases.map((t) => <code class="chip">{t}</code>)}</p>
+            )}
+          </div>
+
+          <div class="detail">
+            <div>
+              <h2>Use it</h2>
+              <dl class="refs">
+                <div><dt>Dockerfile</dt><dd><code>FROM {ref}</code></dd><Copy text={`FROM ${ref}`} /></div>
+                {cur && <div><dt>Pinned</dt><dd><code>{ref}@{cur.digest}</code></dd><Copy text={`${ref}@${cur.digest}`} /></div>}
+                {cur && ARCHES.map((a) => cur.platforms[a] && (
+                  <div class={`arch-${a}`}><dt>{a} only</dt><dd><code>{img.repo}@{cur.platforms[a]}</code></dd><Copy text={`${img.repo}@${cur.platforms[a]}`} /></div>
+                ))}
+              </dl>
+
+              <h2>Builds <a class="h2-link" href={imagePath(img)}>Image page</a></h2>
+              <Timetable img={img} />
+            </div>
+
+            <aside>
+              <h2>On board</h2>
+              <Facts build={cur} />
+              {img.variant !== 'nginx' && (
+                <p class="aside-note">
+                  Extensions: {versions[img.version].extensions.join(', ')}.
+                  {versions[img.version].dropped && <> Not built on {img.version}: {Object.keys(versions[img.version].dropped!).join(', ')}.</>}
+                  {' '}<a href={`${import.meta.env.BASE_URL}matrix/`}>Full matrix</a>
+                </p>
+              )}
+            </aside>
+          </div>
+        </section>
+      );
+    })}
+
+    <section class="image none" data-image="none" hidden>
+      <div class="dest-band">
+        <p class="none-msg" id="none-msg">This combination is not built.</p>
+        <p class="none-alt">Try <a id="none-a" href="?"></a> or <a id="none-b" href="?"></a>.</p>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .builder[data-line=''] { --line: var(--ink); }
+  .builder[data-arch='amd64'] .arch-arm64, .builder[data-arch='arm64'] .arch-amd64 { display: none; }
+
+  .board { display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: flex-end; padding: 36px var(--gutter) 28px; background: var(--board); }
+  .field { border: 0; min-width: 0; }
+  .field legend { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+  .field:disabled .lines { opacity: 0.35; }
+  .lines { display: flex; flex-wrap: wrap; gap: 8px; }
+  .line-pick { position: relative; cursor: pointer; }
+  .line-pick input { position: absolute; opacity: 0; }
+  .line-pick :global(.bullet) { min-width: 60px; height: 38px; font-size: 15px; border-radius: 6px; transition: box-shadow 0.15s, transform 0.15s; }
+  .line-pick:hover :global(.bullet) { transform: translateY(-1px); }
+  .line-pick input:checked + :global(.bullet) { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--ink); }
+  .line-pick input:focus-visible + :global(.bullet) { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--accent); }
+
+  .none-msg { font-size: 20px; font-weight: 500; padding: 24px 0 8px; }
+  .none-alt { color: var(--muted); }
+  .none-alt a { color: var(--ink); font-family: var(--mono); font-size: 14px; }
+</style>
+
+<script>
+  const root = document.getElementById('builder')!;
+  const form = document.getElementById('picker') as HTMLFormElement;
+  const lineField = document.getElementById('line-field') as HTMLFieldSetElement;
+  const panels = [...root.querySelectorAll<HTMLElement>('[data-image]')];
+  const noneMsg = document.getElementById('none-msg')!;
+
+  const radios = (name: string) => [...form.querySelectorAll<HTMLInputElement>('input[type=radio]')].filter((r) => r.name === name);
+
+  function apply(push: boolean) {
+    // read radios directly: FormData skips the PHP group while its fieldset is disabled
+    const [v, os, variant, arch] = ['v', 'os', 'variant', 'arch'].map((k) => radios(k).find((r) => r.checked)?.value ?? '');
+    const nginx = variant === 'nginx';
+    lineField.disabled = nginx;
+    root.dataset.line = nginx ? '' : v;
+    root.dataset.arch = arch;
+    const id = nginx ? `nginx-${os}` : `${v}-${os}-${variant}`;
+    const hit = panels.some((p) => p.dataset.image === id);
+    panels.forEach((p) => (p.hidden = p.dataset.image !== (hit ? id : 'none')));
+    if (!hit) {
+      const fp = radios('v').find((r) => r.value === v)?.dataset.frankenphp === 'false';
+      noneMsg.textContent = variant === 'frankenphp' && fp
+        ? `No PHP ${v} FrankenPHP image: FrankenPHP has no PHP ${v} release yet.`
+        : `PHP ${v} is not built for ${os} ${variant}.`;
+      const stable = [...form.querySelectorAll<HTMLInputElement>('input[name=v][data-frankenphp=true]')].at(-1)?.value ?? v;
+      const alts = [{ v: stable, os, variant, arch }, { v, os, variant: 'cli', arch }];
+      ['none-a', 'none-b'].forEach((elId, i) => {
+        const a = document.getElementById(elId) as HTMLAnchorElement;
+        a.href = `?${new URLSearchParams(alts[i])}`;
+        a.textContent = `${alts[i].v}-${os}-${alts[i].variant}`;
+      });
+    }
+    if (push) history.replaceState(null, '', `?${new URLSearchParams({ v, os, variant, arch })}`);
+  }
+
+  const q = new URLSearchParams(location.search);
+  for (const k of ['v', 'os', 'variant', 'arch']) {
+    const input = radios(k).find((r) => r.value === q.get(k));
+    if (input) input.checked = true;
+  }
+  form.addEventListener('change', () => apply(true));
+  apply(false);
+</script>

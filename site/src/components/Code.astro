@@ -1,0 +1,12 @@
+---
+import Copy from './Copy.astro';
+import { highlight } from '../lib/data';
+
+interface Props { code: string; lang: string }
+const { code, lang } = Astro.props;
+const html = await highlight(code, lang);
+---
+<figure class="code">
+  <figcaption><span>{lang}</span><Copy text={code} /></figcaption>
+  <Fragment set:html={html} />
+</figure>
