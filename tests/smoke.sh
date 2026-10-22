@@ -27,6 +27,8 @@ echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
 echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
 # shellcheck disable=SC2016
 echo '<?php echo implode("|", array_map(fn ($k) => $_SERVER[$k] ?? "", ["REMOTE_ADDR", "HTTPS", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED_PROTO", "HTTP_X_FORWARDED_HOST", "HTTP_FORWARDED"]));' > "$work/public/fwd.php"
+# shellcheck disable=SC2016
+echo '<?php echo implode(" ", array_keys(array_filter($_SERVER, fn ($v, $k) => $v === "" && str_starts_with($k, "HTTP_"), ARRAY_FILTER_USE_BOTH)));' > "$work/public/empty.php"
 spoof=(-H 'X-Forwarded-For: 6.6.6.6, 203.0.113.7' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Host: evil.example' -H 'Forwarded: for=6.6.6.6')
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
@@ -112,6 +114,7 @@ case "$target" in
 		http_ok
 		! curl -sI "http://127.0.0.1:$port/" | grep -qi '^x-powered-by' || fail "X-Powered-By sent"
 		! docker logs "$id" 2>&1 | grep -q "\"GET /index.php\" 200" || fail "php-fpm access log duplicates nginx"
+		docker exec -u 1000 "$id" nginx -e stderr -s reload || fail "nginx -s reload"
 		[ "$(status_code /.env)" = 403 ] || fail "dotfile not denied"
 		[ "$(status_code /.well-known-secrets)" = 403 ] || fail ".well-known prefix not denied"
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
@@ -140,12 +143,15 @@ case "$target" in
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
 		start /app/public -e TRUSTED_PROXIES='0.0.0.0/0 ::/0' "${hardened[@]}" --tmpfs /run "$image"
-		docker exec -u 1000 "$id" nginx -e stderr -c /run/nginx/nginx.conf -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
+		docker exec -u 1000 "$id" nginx -e stderr -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
+		docker exec -u 1000 "$id" nginx -e stderr -s reload || fail "nginx -s reload"
 		http_ok
 		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
 		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"
 		fwd=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$port/fwd.php")
 		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https||" ] || fail "trusted proxy headers seen as '$fwd'"
+		empty=$(curl -fsS "http://127.0.0.1:$port/empty.php")
+		[ -z "$empty" ] || fail "empty headers reached PHP: $empty"
 		;;
 	*)
 		fail "unknown target"
