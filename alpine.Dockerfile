@@ -145,7 +145,8 @@ ARG NGINX_VERSION
 ADD --checksum=sha256:ff7cf138acc09f2a5029300ab713fe6a1440605fca72e2bab76a4da9206fec87 https://nginx.org/keys/nginx_signing.rsa.pub /etc/apk/keys/
 # hadolint ignore=DL3018
 RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,2 /etc/alpine-release)" >> /etc/apk/repositories \
-    && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst
+    && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst \
+    && rm /etc/nginx/conf.d/default.conf
 COPY --from=s6 /s6/ /
 COPY rootfs/nginx/ rootfs/s6/ /
 ENV PHP_FPM_HOST=127.0.0.1 \
@@ -165,7 +166,8 @@ ADD --checksum=sha256:ff7cf138acc09f2a5029300ab713fe6a1440605fca72e2bab76a4da920
 # hadolint ignore=DL3018
 RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,2 /etc/alpine-release)" >> /etc/apk/repositories \
     && apk upgrade --no-cache \
-    && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst setpriv
+    && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst setpriv \
+    && rm /etc/nginx/conf.d/default.conf
 COPY rootfs/common/ rootfs/nginx/ /
 ENV APP_ROOT=/app \
     PHP_FPM_HOST=php-fpm \

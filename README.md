@@ -176,7 +176,7 @@ docker run --read-only --tmpfs /run:exec --tmpfs /tmp \
   -e PUID=1000 ghcr.io/mintopia/php:8.5-php-fpm-nginx
 ```
 
-nginx renders its config into `/run/nginx` at start, so `/etc` stays read-only. FrankenPHP keeps Caddy's state in `/data` and `/config`, so with automatic HTTPS, use a volume rather than tmpfs for `/data` to keep certificates across restarts.
+nginx renders its config into `/run/nginx` at start, so `/etc` stays read-only. Extra `*.conf` files mounted into `/etc/nginx/conf.d/` are still included in the `http` block. FrankenPHP keeps Caddy's state in `/data` and `/config`, so with automatic HTTPS, use a volume rather than tmpfs for `/data` to keep certificates across restarts.
 
 nginx denies requests for dotfiles, such as `/.env` or `/.git/config`, except under `/.well-known/`.
 

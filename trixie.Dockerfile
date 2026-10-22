@@ -164,6 +164,7 @@ ADD --chmod=644 --checksum=sha256:55385da31d198fa6a5012d40ae98ecb272a6c4e8fffffb
 RUN echo 'deb [signed-by=/usr/share/keyrings/nginx.asc] http://nginx.org/packages/debian trixie nginx' > /etc/apt/sources.list.d/nginx.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends "nginx=${NGINX_VERSION}-*" gettext-base \
+    && rm /etc/nginx/conf.d/default.conf \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=s6 /s6/ /
 COPY rootfs/nginx/ rootfs/s6/ /
@@ -187,6 +188,7 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/nginx.asc] http://nginx.org/package
     && apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends "nginx=${NGINX_VERSION}-*" gettext-base \
+    && rm /etc/nginx/conf.d/default.conf \
     && rm -rf /var/lib/apt/lists/* \
     && find / -xdev -perm /6000 -type f -exec chmod ug-s {} +
 COPY rootfs/common/ rootfs/nginx/ /

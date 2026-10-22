@@ -69,8 +69,9 @@ if [ -d /etc/nginx/templates ]; then
 		NGINX_RESOLVER="resolver ${NGINX_RESOLVER}valid=10s;"
 	fi
 	export NGINX_STATUS_LOCATIONS NGINX_REAL_IP NGINX_RESOLVER NGINX_USER_DIRECTIVE
-	# rendered under /run so /etc can be read-only; 1777 as nginx may run as PUID and creates its temp dirs here
-	mkdir -p /run/nginx && chmod 1777 /run/nginx
+	# rendered under /run so /etc can be read-only; config stays root-owned, only var/ (pid, temp) is PUID-writable
+	mkdir -p /run/nginx/var
+	[ -z "${PUID:-}" ] || chown "$PUID:${PGID:-$PUID}" /run/nginx/var
 	find /etc/nginx/templates -name '*.template' | while read -r template; do
 		target="/run/nginx/${template#/etc/nginx/templates/}"
 		mkdir -p "$(dirname "$target")"

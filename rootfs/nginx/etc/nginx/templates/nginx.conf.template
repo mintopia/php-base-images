@@ -1,7 +1,7 @@
 ${NGINX_USER_DIRECTIVE}
 worker_processes auto;
 error_log stderr warn;
-pid /run/nginx/nginx.pid;
+pid /run/nginx/var/nginx.pid;
 
 events {
     worker_connections 1024;
@@ -23,11 +23,12 @@ http {
     gzip_min_length 256;
     gzip_types application/javascript application/json application/xml image/svg+xml text/css text/plain text/xml;
 
-    client_body_temp_path /run/nginx/client_temp;
-    fastcgi_temp_path /run/nginx/fastcgi_temp;
-    proxy_temp_path /run/nginx/proxy_temp;
-    scgi_temp_path /run/nginx/scgi_temp;
-    uwsgi_temp_path /run/nginx/uwsgi_temp;
+    client_body_temp_path /run/nginx/var/client_temp;
+    fastcgi_temp_path /run/nginx/var/fastcgi_temp;
+    proxy_temp_path /run/nginx/var/proxy_temp;
+    scgi_temp_path /run/nginx/var/scgi_temp;
+    uwsgi_temp_path /run/nginx/var/uwsgi_temp;
 
     include /run/nginx/conf.d/*.conf;
+    include /etc/nginx/conf.d/*.conf;
 }
