@@ -142,7 +142,8 @@ case "$target" in
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
 		start /app/public -e TRUSTED_PROXIES='0.0.0.0/0 ::/0' "${hardened[@]}" --tmpfs /run "$image"
-		docker exec -u 1000 "$id" nginx -e stderr -c /run/nginx/nginx.conf -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
+		docker exec -u 1000 "$id" nginx -e stderr -t 2>&1 | grep -q 'test is successful' || fail "nginx -t"
+		docker exec -u 1000 "$id" nginx -e stderr -s reload || fail "nginx -s reload"
 		http_ok
 		addr=$(curl -fsS -H 'X-Forwarded-For: 203.0.113.7' "http://127.0.0.1:$port/addr.php")
 		[ "$addr" = 203.0.113.7 ] || fail "trusted X-Forwarded-For seen as '$addr'"

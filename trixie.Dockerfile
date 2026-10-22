@@ -201,4 +201,4 @@ WORKDIR /app
 EXPOSE 8080
 STOPSIGNAL SIGQUIT
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["nginx", "-e", "stderr", "-c", "/run/nginx/nginx.conf", "-g", "daemon off;"]
+CMD ["nginx", "-e", "stderr", "-g", "daemon off;"]
