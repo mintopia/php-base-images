@@ -108,6 +108,7 @@ case "$target" in
 		start /srv/public -e APP_ROOT=/srv "${hardened[@]}" --tmpfs /run:exec --tmpfs /tmp -e PHP_FPM_STATUS_PATH=/status -e NGINX_STATUS_PATH=/nginx_status "$image"
 		http_ok
 		! curl -sI "http://127.0.0.1:$port/" | grep -qi '^x-powered-by' || fail "X-Powered-By sent"
+		! docker logs "$id" 2>&1 | grep -q "\"GET /index.php\" 200" || fail "php-fpm access log duplicates nginx"
 		[ "$(status_code /.env)" = 403 ] || fail "dotfile not denied"
 		[ "$(status_code /.well-known-secrets)" = 403 ] || fail ".well-known prefix not denied"
 		[ "$(status_code /status)" = 403 ] || fail "status not restricted"
