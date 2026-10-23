@@ -8,6 +8,10 @@ colors:
   line-85-blue: "#0a64c8"
   line-86-amber: "#e8b100"
   live-green: "#2fbf6a"
+  sev-critical: "#e5484d"
+  sev-high: "#f0898c"
+  sev-medium: "#c7a3a5"
+  sev-low: "#7d8087"
   ground: "#0f1113"
   board: "#17191c"
   raise: "#1d2024"
@@ -138,6 +142,7 @@ Line colours are mid-luminance so they hold on the dark ground. Lines are applie
 
 ### Secondary
 - **Live Green** (live-green): the status dot for the build currently served by a tag. Never used for anything else.
+- **Severity reds** (sev-critical, sev-high, sev-medium, sev-low): CVE severity dots and the critical-CVE alert only. A ramp from red to grey so critical reads loudest; Unrated is a hollow muted ring. Never used for anything but vulnerability status.
 
 ### Neutral
 - **Ground** (ground): page background.
@@ -149,7 +154,7 @@ Line colours are mid-luminance so they hold on the dark ground. Lines are applie
 - **Control** (control): borders of interactive controls and disabled segment text.
 
 ### Named Rules
-**The Lines Only Rule.** Saturated colour belongs only to PHP versions (8.2 violet, 8.3 teal, 8.4 orange, 8.5 blue, 8.6 amber) plus live green. Variants, OSes, architectures and nginx are ink. Never introduce a colour for anything that is not a PHP line.
+**The Lines Only Rule.** Saturated colour belongs only to PHP versions (8.2 violet, 8.3 teal, 8.4 orange, 8.5 blue, 8.6 amber) plus the two status exceptions: live green and the CVE severity reds. Variants, OSes, architectures and nginx are ink. Never introduce a colour for anything that is not a PHP line.
 
 **The Selected Line Is The Accent Rule.** On image and build pages and in the home hero, `--accent` equals the selected `--line`. Focus outlines, the primary button, the timetable's live-row inset marker and `::selection` follow it. On nginx pages (no PHP line) the line falls back to ink.
 

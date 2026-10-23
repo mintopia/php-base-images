@@ -285,3 +285,24 @@ a.line-pick:hover .bullet { opacity: 0.85; transform: translateY(-1px); }
   .toc a { border-left: 0; padding: 2px 0; }
 }
 .releases a[aria-current] { color: var(--ink); text-decoration: none; font-weight: 700; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: var(--gutter); top: 8px; z-index: 10; padding: 10px 14px; border-radius: 6px; background: var(--ink); color: var(--bg); font-weight: 500; transform: translateY(-200%); }
+.skip:focus { transform: none; }
+main:focus { outline: none; }
+.code pre { overflow-x: auto; }
+.cves td:first-child { white-space: nowrap; }
+.timetable .nw { white-space: nowrap; }
+.timetable td:first-child a { white-space: nowrap; }
+@media (max-width: 560px) {
+  .picker { gap: 16px 24px; padding: 20px var(--gutter); }
+  .timetable .php-col { display: none; }
+  .timetable td:first-child a { white-space: normal; }
+}
+@media (pointer: coarse) {
+  .btn, .refs .btn, .code figcaption .btn { min-height: 44px; }
+  .seg a, .seg span, .seg label, .line-pick .bullet { min-height: 44px; }
+  .build-nav a { padding: 6px 0; }
+  .more-labels summary { padding: 10px 0; }
+  .more-tags summary { padding: 12px 10px; }
+}

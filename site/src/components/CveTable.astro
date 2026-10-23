@@ -1,8 +1,9 @@
 ---
 import { type Image, type Cve, byVersion, chain, imagePath, fmtSeverity } from '../lib/data';
 
-interface Props { img: Image; cves: Cve[] }
-const { img, cves } = Astro.props;
+interface Props { img: Image; cves: Cve[]; live?: Cve[] | null }
+const { img, cves, live } = Astro.props;
+const inLive = new Set(live?.map((c) => c.id));
 // the page carrying a PHP fix: that patch's own page, else the minor once it has moved past it
 const fixPage = (fixed: string) => {
   const top = img.parent ?? img;
@@ -12,16 +13,17 @@ const cveUrl = (c: Cve) => c.url ?? (c.id.startsWith('CVE-') ? `https://nvd.nist
 ---
 <div class="table-wrap">
   <table class="cves">
-    <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th></tr></thead>
+    <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th>{live && <th>Live build</th>}</tr></thead>
     <tbody>
       {cves.map((c) => {
         const page = c.pkg === 'php' ? fixPage(c.fixed) : null;
         return (
           <tr>
             <td class="mono">{cveUrl(c) ? <a href={cveUrl(c)}>{c.id}</a> : c.id}</td>
-            <td><span class:list={['sev', c.severity.toLowerCase()]}>{fmtSeverity(c.severity)}</span></td>
+            <td><span class:list={['sev', c.severity.toLowerCase()]} title={c.severity === 'UNKNOWN' ? 'No severity assigned by the advisory' : undefined}>{fmtSeverity(c.severity)}</span></td>
             <td class="mono">{c.pkg}</td>
             <td class="mono">{page ? <a href={imagePath(page)}>{c.fixed}</a> : c.fixed || <span class="muted">No fix yet</span>}</td>
+            {live && <td>{inLive.has(c.id) ? <span class="cve">Still affected</span> : <span class="muted">Fixed</span>}</td>}
           </tr>
         );
       })}

@@ -1,6 +1,6 @@
 ---
 import Bullet from './Bullet.astro';
-import { type Image, fmtTime, shortDigest, commitUrl, buildPath, imagePath, criticals } from '../lib/data';
+import { type Image, fmtDate, shortDigest, commitUrl, buildPath, imagePath, criticals } from '../lib/data';
 
 interface Props { img: Image; current?: string }
 const { img, current } = Astro.props;
@@ -11,12 +11,12 @@ const php = img.variant !== 'nginx';
 ) : (
   <div class="table-wrap">
     <table class="timetable">
-      <thead><tr><th>Built (UTC)</th>{php && <th>PHP</th>}<th>Change</th><th class="wide">Digest</th><th class="wide">Commit</th><th>Status</th></tr></thead>
+      <thead><tr><th>Built (UTC)</th>{php && <th class="php-col">PHP</th>}<th>Change</th><th class="wide">Digest</th><th class="wide">Commit</th><th>Status</th></tr></thead>
       <tbody>
         {img.builds.map((r) => (
           <tr class:list={{ live: r.live, here: r.digest === current }}>
-            <td class="mono"><a href={buildPath(img, r)} aria-current={r.digest === current ? 'page' : undefined}>{fmtTime(r.time)}</a></td>
-            {php && <td class="mono">{r.php}</td>}
+            <td class="mono"><a href={buildPath(img, r)} aria-current={r.digest === current ? 'page' : undefined}><span class="nw">{fmtDate(r.time)}</span> <span class="nw">{r.time.slice(11, 16)}</span></a></td>
+            {php && <td class="mono php-col">{r.php}</td>}
             <td><div class="changes">
               {r.changes.map((c) => c.kind === 'php'
                 ? <span class="php-change"><Bullet version={img.version} size="sm" />{c.text.replace(/^PHP /, '')}</span>

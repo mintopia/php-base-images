@@ -12,7 +12,7 @@ const hidden = tags.filter((t) => !shown.includes(t));
 {shown.map((t) => <code class="chip">{t}</code>)}
 {hidden.length > 0 && (
   <details class="more-tags">
-    <summary>+{hidden.length} shorter</summary>
+    <summary title="Shorter tags that leave out parts and take the defaults (latest stable PHP, alpine, cli)">+{hidden.length} shorter</summary>
     <div>{hidden.map((t) => <code class="chip">{t}</code>)}</div>
   </details>
 )}

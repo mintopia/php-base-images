@@ -5,6 +5,8 @@ import Copy from '../../../components/Copy.astro';
 import Facts from '../../../components/Facts.astro';
 import Unstable from '../../../components/Unstable.astro';
 import Aliases from '../../../components/Aliases.astro';
+import CveFix from '../../../components/CveFix.astro';
+import LiveLink from '../../../components/LiveLink.astro';
 import Versions from '../../../components/Versions.astro';
 import CveTable from '../../../components/CveTable.astro';
 import CveSummary from '../../../components/CveSummary.astro';
@@ -32,11 +34,12 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
       </nav>
       <div class="dest">
         {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
-        <h1><small>{img.repo}{b.live ? '' : <> · was {img.tag}</>} · built {fmtTime(b.time)} UTC</small>{b.live ? img.tag : shortDigest(b.digest)}</h1>
+        <h1><small>{img.repo}{b.live ? '' : <> · was {img.tag}</>} · built {fmtTime(b.time)} UTC<span class="sr-only">, </span></small>{b.live ? img.tag : shortDigest(b.digest)}</h1>
         <Copy text={pinned} label="Copy pinned reference" primary />
       </div>
       <div class="tracks">
         {b.live ? <span class="status">Live</span> : <span class="status old">Superseded {newer && <>on {fmtTime(newer.time)} by <a href={buildPath(img, newer)}>{shortDigest(newer.digest)}</a></>}</span>}
+        {!b.live && <LiveLink img={img} skip={newer?.digest} />}
         {b.tags.length > 0 && <span class="muted">· tagged</span>}
         <Aliases img={img} tags={b.tags.filter((t) => t !== img.tag)} />
       </div>
@@ -50,10 +53,7 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
           <section class="alert">
             <h2><span class="cve">{crit.length} critical CVE{crit.length === 1 ? '' : 's'}</span> in this build</h2>
             <CveTable img={img} cves={crit} />
-            <p class="note">
-              {crit.some((c) => c.pkg === 'php') && <>PHP critical CVEs are fixed by a newer PHP release{img.parent && <>; <a href={imagePath(img.parent)}><code>{img.parent.tag}</code></a> tracks it</>}. </>}
-              {crit.some((c) => c.pkg !== 'php' && c.fixed) && (b.live ? 'The next daily check rebuilds this image with the OS package fixes. ' : 'Pull the live tag for a build with the OS package fixes. ')}
-            </p>
+            <CveFix img={img} cves={crit} live={b.live} />
           </section>
         )}
         <h2>What changed</h2>

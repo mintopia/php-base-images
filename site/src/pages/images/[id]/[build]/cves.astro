@@ -3,6 +3,7 @@ import Base from '../../../../layouts/Base.astro';
 import Bullet from '../../../../components/Bullet.astro';
 import Copy from '../../../../components/Copy.astro';
 import CveTable from '../../../../components/CveTable.astro';
+import LiveLink from '../../../../components/LiveLink.astro';
 import { pages, type Image, type Build, fmtTime, shortDigest, buildPath, imagePath, scannedAt } from '../../../../lib/data';
 
 export function getStaticPaths() {
@@ -22,15 +23,15 @@ const pinned = b.live ? `${img.repo}:${img.tag}@${b.digest}` : `${img.repo}@${b.
       </nav>
       <div class="dest">
         {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
-        <h1><small>{img.repo} · built {fmtTime(b.time)} UTC</small>{img.tag}</h1>
+        <h1><small>{img.repo}{b.live ? '' : <> · was {img.tag}</>} · built {fmtTime(b.time)} UTC<span class="sr-only">, </span></small>{b.live ? img.tag : shortDigest(b.digest)}</h1>
         <Copy text={pinned} label="Copy pinned reference" primary />
       </div>
-      <p class="tracks">{b.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}</p>
+      <div class="tracks">{b.live ? <span class="status">Live</span> : <><span class="status old">Superseded</span><LiveLink img={img} /></>}</div>
     </div>
     <div class="detail">
       <div>
         <h2>CVEs <span class="muted count">{b.cves!.length}</span></h2>
-        <CveTable img={img} cves={b.cves!} />
+        <CveTable img={img} cves={b.cves!} live={b.live ? undefined : img.current?.cves} />
       </div>
       <aside>
         <h2>Scan</h2>
