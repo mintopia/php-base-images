@@ -244,12 +244,6 @@ async function render(md: string) {
   return html;
 }
 
-export function readmeSection(from: string, to: string) {
-  const start = readme.indexOf(`\n${from}\n`);
-  const end = readme.indexOf(`\n${to}\n`, start + 1);
-  return render(readme.slice(start, end === -1 ? undefined : end).replace(/^(#+) /gm, '$1# '));
-}
-
 // a single README table, found by the start of its header row
 export function readmeTable(header: string) {
   const start = readme.indexOf(`\n${header}`);
