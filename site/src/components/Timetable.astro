@@ -1,11 +1,10 @@
 ---
 import Bullet from './Bullet.astro';
-import { type Image, type Build, fmtTime, shortDigest, commitUrl, buildPath } from '../lib/data';
+import { type Image, fmtTime, shortDigest, commitUrl, buildPath } from '../lib/data';
 
 interface Props { img: Image; current?: string }
 const { img, current } = Astro.props;
 const php = img.variant !== 'nginx';
-const minor = (b: Build) => !b.live && b.changes.every((c) => c.kind === 'rebuild');
 ---
 {img.builds.length === 0 ? (
   <p class="muted empty">No builds recorded yet. History starts with the next published build.</p>
@@ -15,7 +14,7 @@ const minor = (b: Build) => !b.live && b.changes.every((c) => c.kind === 'rebuil
       <thead><tr><th>Built (UTC)</th>{php && <th>PHP</th>}<th>Change</th><th class="wide">Digest</th><th class="wide">Commit</th><th>Status</th></tr></thead>
       <tbody>
         {img.builds.map((r) => (
-          <tr class:list={{ live: r.live, here: r.digest === current, minor: minor(r) }}>
+          <tr class:list={{ live: r.live, here: r.digest === current }}>
             <td class="mono"><a href={buildPath(img, r)} aria-current={r.digest === current ? 'page' : undefined}>{fmtTime(r.time)}</a></td>
             {php && <td class="mono">{r.php}</td>}
             <td><div class="changes">
@@ -36,7 +35,4 @@ const minor = (b: Build) => !b.live && b.changes.every((c) => c.kind === 'rebuil
 )}
 
 <style>
-  /* rebuilds that changed nothing tracked stay listed, quietly */
-  .minor td { opacity: 0.5; }
-  .minor:hover td { opacity: 1; }
 </style>

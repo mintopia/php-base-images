@@ -67,7 +67,6 @@ A series of PHP base images.
  - gmp
  - soap
  - apcu
- - igbinary
  - mongodb
 
 #### Security

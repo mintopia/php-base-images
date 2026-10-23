@@ -50,11 +50,6 @@ packagist() {
 		| jq -r --arg p "$1" '.packages[$p][].version | ltrimstr("v") | select(test("^[0-9]+(\\.[0-9]+)*$"))' | sort -V | tail -1)"
 }
 
-# the release PECL marks stable, which can carry an RC suffix
-pecl_stable() {
-	safe "$(curl -fsSL --retry 3 "https://pecl.php.net/rest/r/$1/stable.txt")"
-}
-
 github_release() {
 	local auth=()
 	[ -z "${GITHUB_TOKEN:-}" ] || auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
@@ -92,13 +87,12 @@ nginx_key=$(for key in "${selected[@]}"; do jq -r --arg k "$key" 'select(.[$k].s
 
 redis=$(packagist phpredis/phpredis)
 apcu=$(packagist apcu/apcu)
-igbinary=$(pecl_stable igbinary)
 mongodb=$(packagist mongodb/mongodb-extension)
 otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
-common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg igbinary "$igbinary" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
-	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, APCU_VERSION: $apcu, IGBINARY_VERSION: $igbinary, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
+common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
+	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -121,7 +115,7 @@ done
 expected_labels() {
 	jq -c -n --arg v "$1" --argjson vars "$2" --argjson exts "$3" '
 		($vars.PHP_SOURCE == "src" and $v != "nginx") as $src
-		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", igbinary: "IGBINARY_VERSION", mongodb: "MONGODB_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
+		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", mongodb: "MONGODB_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
 		| {cli: "ZTS_DIGEST", frankenphp: "FRANKENPHP_DIGEST", "php-fpm": "FPM_DIGEST", "php-fpm-nginx": "FPM_DIGEST", nginx: "NGINX_BASE_DIGEST"} as $base
 		| {"org.opencontainers.image.base.digest": $vars[if $src then "NGINX_BASE_DIGEST" else $base[$v] end]}
 		+ (if $src then {"net.mintopia.php.source": "php-src", "net.mintopia.php.tag": $vars.PHP_TAG} else {} end)
@@ -185,30 +179,34 @@ for key in "${selected[@]}"; do
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
 
-		stale=()
 		if ! $all; then
+			# every publish is permanent, so only stale targets are rebuilt
+			stale=() rebuild=()
 			for t in "${targets[@]}"; do
 				if [ "$t" = nginx ]; then ref=ghcr.io/mintopia/nginx:$os; else ref=ghcr.io/mintopia/php:$key-$os-$t; fi
-				if ! published=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null); then
-					stale+=("$t(missing)")
-					continue
+				reasons=()
+				if published=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null); then
+					exp=$(expected_labels "$t" "$vars" "$exts")
+					for arch in "${archs[@]}"; do
+						diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
+							'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
+						[ -z "$diff" ] || reasons+=("$arch($diff)")
+					done
+					if [ ${#reasons[@]} -eq 0 ]; then
+						cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
+						[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
+					fi
+				else
+					reasons=(missing)
 				fi
-				exp=$(expected_labels "$t" "$vars" "$exts")
-				for arch in "${archs[@]}"; do
-					diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
-						'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
-					[ -z "$diff" ] || stale+=("$t/$arch($diff)")
-				done
-				# any stale target rebuilds the whole lane, so only scan while it still looks current
-				[ ${#stale[@]} -eq 0 ] || continue
-				cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
-				[ -z "$cves" ] || stale+=("$t(fixable CVEs $cves)")
+				[ ${#reasons[@]} -eq 0 ] || { stale+=("$t: ${reasons[*]}"); rebuild+=("$t"); }
 			done
-			if [ ${#stale[@]} -eq 0 ]; then
+			if [ ${#rebuild[@]} -eq 0 ]; then
 				log "up to date: $key $os"
 				continue
 			fi
-			log "stale: $key $os: ${stale[*]}"
+			log "stale: $key $os: $(IFS=';'; echo "${stale[*]}")"
+			targets=("${rebuild[@]}")
 		fi
 
 		for arch in "${archs[@]}"; do

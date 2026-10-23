@@ -32,7 +32,6 @@ variable "S6_OVERLAY_VERSION" { default = "3.2.3.2" }
 variable "GRPC_VERSION" { default = "" }
 variable "REDIS_VERSION" { default = "6.3.0" }
 variable "APCU_VERSION" { default = "5.1.28" }
-variable "IGBINARY_VERSION" { default = "3.2.17RC1" }
 variable "MONGODB_VERSION" { default = "2.5.5" }
 variable "OPENTELEMETRY_VERSION" { default = "1.4.2" }
 variable "PROTOBUF_VERSION" { default = "35.1" }
@@ -126,7 +125,6 @@ target "_common" {
     GRPC_VERSION          = grpc_version()
     REDIS_VERSION         = REDIS_VERSION
     APCU_VERSION          = APCU_VERSION
-    IGBINARY_VERSION      = IGBINARY_VERSION
     MONGODB_VERSION       = MONGODB_VERSION
     OPENTELEMETRY_VERSION = OPENTELEMETRY_VERSION
     PROTOBUF_VERSION      = PROTOBUF_VERSION
@@ -140,7 +138,6 @@ target "_common" {
       grpc          = grpc_version()
       redis         = REDIS_VERSION
       apcu          = APCU_VERSION
-      igbinary      = IGBINARY_VERSION
       mongodb       = MONGODB_VERSION
       opentelemetry = OPENTELEMETRY_VERSION
       protobuf      = PROTOBUF_VERSION

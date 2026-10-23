@@ -103,6 +103,10 @@ function diff(prev: BuildRecord | undefined, cur: BuildRecord): Change[] {
     // a label missing before means the label was added, not the component
     if (before[name] && before[name] !== v) out.push({ kind: 'component', text: `${name} ${before[name]} → ${v}` });
   }
+  if (prev.modules?.length && cur.modules?.length) {
+    for (const m of prev.modules) if (!cur.modules.includes(m)) out.push({ kind: 'component', text: `${m} removed` });
+    for (const m of cur.modules) if (!prev.modules.includes(m)) out.push({ kind: 'component', text: `${m} added` });
+  }
   if (out.length === 0 && prev.labels[BASE] && prev.labels[BASE] !== cur.labels[BASE]) {
     const name = cur.labels['org.opencontainers.image.base.name']?.replace('docker.io/library/', '');
     out.push({ kind: 'base', text: name ? `${name} base image updated` : 'New OS base image' });
@@ -124,7 +128,10 @@ function image(version: string, os: string, variant: Variant): Image {
   const mine = records
     .filter((r) => r.os === os && r.variant === variant && (variant === 'nginx' || r.version === version))
     .sort((a, b) => a.time.localeCompare(b.time));
-  const kept = mine.map((r, i) => ({ r, changes: diff(mine[i - 1], r) }));
+  // rebuilds that changed nothing tracked are hidden unless the tags still point at them
+  const kept = mine
+    .map((r, i) => ({ r, changes: diff(mine[i - 1], r) }))
+    .filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
   const builds: Build[] = kept
     .map(({ r, changes }, i) => ({ ...r, changes, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
     .reverse();
@@ -150,6 +157,12 @@ export interface Commit {
   subject: string;
 }
 
+// igbinary was never in a listed build (ADR 0017); null hides the commit
+const SUBJECTS: Record<string, string | null> = {
+  a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
+  '0d91d6e2482ee4e71ad708b30c950a20c5e11a55': 'Bundle intl, zip, exif, sockets, gmp, soap and apcu so common frameworks run without a compiler stage',
+};
+
 export const commits: Commit[] = execFileSync('git', ['log', '--no-merges', '--format=%H%x09%cI%x09%s', '-n', '400'], {
   cwd: root,
   encoding: 'utf8',
@@ -158,8 +171,9 @@ export const commits: Commit[] = execFileSync('git', ['log', '--no-merges', '--f
   .filter(Boolean)
   .map((l) => {
     const [sha, time, subject] = l.split('\t');
-    return { sha, time, subject };
-  });
+    return { sha, time, subject: sha in SUBJECTS ? SUBJECTS[sha] : subject };
+  })
+  .filter((c): c is Commit => c.subject !== null);
 
 export interface Day {
   date: string;
