@@ -71,6 +71,7 @@ export out root matrix latest
 for package in php nginx; do
 	image=ghcr.io/mintopia/$package
 	children=' '
+	# shellcheck disable=SC2016
 	gh api --paginate "/users/mintopia/packages/container/$package/versions" \
 		--jq '.[] | (.metadata.container.tags) as $t
 			| select(($t | length) == 0 or ([$t[] | select(endswith(".sig") or startswith("cache-") | not)] | length > 0))
