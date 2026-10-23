@@ -178,6 +178,8 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      # cross-package copies make many registry requests; GHCR allows 2000/minute
+      max-parallel: 6
       matrix:
         include: ${{ fromJSON(needs.resolve.outputs.merges) }}
     steps:
@@ -215,7 +217,11 @@ jobs:
           tags=()
           names=()
           while read -r t; do tags+=(-t "$image:$t"); names+=("$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST")
-          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
+          for i in 1 2 3; do
+            docker buildx imagetools create "${tags[@]}" "${refs[@]}" && break
+            [ "$i" = 3 ] && exit 1
+            sleep $((i * 30))
+          done
           digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
           cosign sign --yes "$image@$digest"
           platforms=$(docker buildx imagetools inspect "$image@$digest" --raw \
