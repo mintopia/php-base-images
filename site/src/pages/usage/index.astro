@@ -65,7 +65,7 @@ const hardened = `services:
     environment:
       PUID: 1000`;
 const extend = `FROM ${php}:${v}-php-fpm
-RUN install-php-extensions intl
+RUN install-php-extensions xsl
 COPY --chmod=755 migrate.sh /docker-entrypoint.d/50-migrate`;
 const composerBuild = `FROM ${php}:${v}-cli AS vendor
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
@@ -79,12 +79,12 @@ FROM ${php}:${v}-php-fpm
 COPY --from=vendor /app /app`;
 const pieAlpine = `FROM ${php}:${v}-php-fpm
 RUN apk add --no-cache --virtual .pie-deps $PHPIZE_DEPS \\
-    && pie install apcu/apcu \\
+    && pie install xdebug/xdebug \\
     && apk del .pie-deps`;
 const pieTrixie = `FROM ${php}:${v}-trixie-php-fpm
 RUN apt-get update \\
     && apt-get install -y --no-install-recommends $PHPIZE_DEPS unzip \\
-    && pie install apcu/apcu \\
+    && pie install xdebug/xdebug \\
     && apt-get purge -y --auto-remove $PHPIZE_DEPS unzip \\
     && rm -rf /var/lib/apt/lists/*`;
 const status = `environment:
@@ -92,6 +92,30 @@ const status = `environment:
   PHP_FPM_PING_PATH: /fpm-ping
   NGINX_STATUS_PATH: /nginx-status
   PHP_FPM_STATUS_ALLOW: "127.0.0.1 ::1 10.0.0.0/8"`;
+
+const dev = `services:
+  app:
+    image: ${php}:${v}-php-fpm-nginx
+    environment:
+      PHP_INI_MODE: development
+      PHP_FPM_MAX_REQUESTS: 1`;
+const xdebugAlpine = `FROM ${php}:${v}-php-fpm
+RUN install-php-extensions xdebug`;
+const xdebugTrixie = `FROM ${php}:${v}-trixie-php-fpm
+RUN apt-get update \\
+    && apt-get install -y --no-install-recommends $PHPIZE_DEPS \\
+    && install-php-extensions xdebug \\
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS \\
+    && rm -rf /var/lib/apt/lists/*`;
+const xdebugIni = `xdebug.mode=debug
+xdebug.client_host=host.docker.internal
+xdebug.start_with_request=trigger`;
+const reload = `environment:
+  FRANKENPHP_CONFIG: |
+    worker {
+      file ./public/index.php
+      watch ./**/*.php
+    }`;
 
 const toc = [
   ['run', 'Run', [
@@ -104,11 +128,17 @@ const toc = [
     ['proxies', 'Behind a proxy'],
     ['hardened', 'Non-root, read-only'],
     ['status', 'Status pages'],
+    ['logs', 'Logs'],
   ]],
   ['extend', 'Extend', [
     ['extending', 'Extensions and start-up hooks'],
     ['composer', 'Composer'],
     ['pie', 'PIE extensions'],
+  ]],
+  ['develop', 'Develop', [
+    ['dev-mode', 'Development mode'],
+    ['xdebug', 'Xdebug'],
+    ['frankenphp-reload', 'Reloading FrankenPHP workers'],
   ]],
 ] as const;
 ---
@@ -250,12 +280,43 @@ const toc = [
           <h3>Non-root, read-only</h3>
           <p>Every image runs with a read-only root filesystem and no capabilities, given a tmpfs where the variant writes. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
           <Code lang="compose.yaml" code={hardened} />
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Variant</th><th>Writable tmpfs</th></tr></thead>
+              <tbody>
+                <tr><td><code>cli</code></td><td>none, or <code>/tmp</code> if the app writes temp files</td></tr>
+                <tr><td><code>php-fpm</code></td><td><code>/run</code>, and <code>/tmp</code> for sessions and uploads</td></tr>
+                <tr><td><code>nginx</code></td><td><code>/run</code></td></tr>
+                <tr><td><code>php-fpm-nginx</code></td><td><code>/run:exec</code> for s6-overlay, and <code>/tmp</code></td></tr>
+                <tr><td><code>frankenphp</code></td><td><code>/data</code>, <code>/config</code>, <code>/tmp</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">nginx renders its config into <code>/run/nginx</code>; extra <code>*.conf</code> files mounted in <code>/etc/nginx/conf.d/</code> are still included. With FrankenPHP's automatic HTTPS, use a volume for <code>/data</code> so certificates survive restarts.</p>
         </section>
 
         <section id="status">
           <h3>Status pages</h3>
           <p>Off by default. Setting a path turns that page on, reachable only from addresses in <code>PHP_FPM_STATUS_ALLOW</code>.</p>
           <Code lang="compose.yaml" code={status} />
+        </section>
+
+        <section id="logs">
+          <h3>Logs</h3>
+          <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing is written to files in the container.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Variant</th><th>stdout</th><th>stderr</th></tr></thead>
+              <tbody>
+                <tr><td><code>cli</code></td><td>the script's output</td><td>PHP errors and warnings</td></tr>
+                <tr><td><code>php-fpm</code></td><td>nothing</td><td>php-fpm's log, an access line per request, and PHP errors</td></tr>
+                <tr><td><code>php-fpm-nginx</code></td><td>nginx's access log</td><td>nginx's error log, php-fpm's log and PHP errors</td></tr>
+                <tr><td><code>nginx</code></td><td>nginx's access log</td><td>nginx's error log</td></tr>
+                <tr><td><code>frankenphp</code></td><td>nothing</td><td>Caddy and FrankenPHP's JSON log, PHP errors included</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">php-fpm prefixes PHP errors with <code>NOTICE: PHP message:</code> and cuts lines at 8192 bytes. FrankenPHP has no access log unless you set <code>CADDY_SERVER_EXTRA_DIRECTIVES=log</code>.</p>
         </section>
 
         <h2 id="extend">Extend</h2>
@@ -288,6 +349,37 @@ const toc = [
           <p class="muted">On PHP 8.6, PIE is the only way to add PECL extensions. For extensions not on Packagist, <code>install-php-extensions</code> handles its own build dependencies, as in <a href="#extending">Extensions and start-up hooks</a>.</p>
         </section>
 
+        <h2 id="develop">Develop</h2>
+        <p>The same images work for local development, with a few settings changed.</p>
+
+        <section id="dev-mode">
+          <h3>Development mode</h3>
+          <p><code>PHP_INI_MODE=development</code> loads <code>php.ini-development</code>, which displays errors. Leave <code>PHP_OPCACHE_VALIDATE_TIMESTAMPS</code> at <code>1</code> so code changes are picked up. <code>PHP_FPM_MAX_REQUESTS=1</code> restarts each php-fpm worker after every request, so no state leaks between requests.</p>
+          <Code lang="compose.yaml" code={dev} />
+          <p class="muted">FrankenPHP has no per-worker request limit. Skip worker mode in development, or let the app restart its worker: Laravel Octane takes <code>--max-requests=1</code>, and the Symfony runtime reads <code>FRANKENPHP_LOOP_MAX=1</code>.</p>
+        </section>
+
+        <section id="xdebug">
+          <h3>Xdebug</h3>
+          <p>Install it in a derived image. On trixie there is no compiler, so add <code>$PHPIZE_DEPS</code> and purge it in the same <code>RUN</code>.</p>
+          <div class="os-switch">
+            <div class="seg small" role="radiogroup" aria-label="OS">
+              <label><input type="radio" name="xdebug-os" value="alpine" checked />alpine</label>
+              <label><input type="radio" name="xdebug-os" value="trixie" />trixie</label>
+            </div>
+            <div class="alpine"><Code lang="Dockerfile" code={xdebugAlpine} /></div>
+            <div class="trixie"><Code lang="Dockerfile" code={xdebugTrixie} /></div>
+          </div>
+          <p>Configure it with an <code>.ini</code> file in <code>/usr/local/etc/php/conf.d/</code>, copied in or mounted.</p>
+          <Code lang="xdebug.ini" code={xdebugIni} />
+          <p class="muted">On Linux, <code>host.docker.internal</code> needs <code>--add-host=host.docker.internal:host-gateway</code>. Xdebug has no PHP 8.6 release yet.</p>
+        </section>
+
+        <section id="frankenphp-reload">
+          <h3>Reloading FrankenPHP workers</h3>
+          <p>FrankenPHP restarts worker scripts when files they watch change. Spread the worker block over several lines.</p>
+          <Code lang="compose.yaml" code={reload} />
+        </section>
       </div>
     </div>
   </div>

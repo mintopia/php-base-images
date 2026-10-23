@@ -5,6 +5,7 @@ import Copy from '../../../components/Copy.astro';
 import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
 import Examples from '../../../components/Examples.astro';
+import Versions from '../../../components/Versions.astro';
 import { images, type Image, type Build, fmtTime, shortDigest, commitUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
@@ -86,6 +87,7 @@ const run = runUrl(b.run);
           {older ? <a href={buildPath(img, older)}><span class="muted">Older</span>{fmtTime(older.time)}</a> : <span />}
           {newer ? <a href={buildPath(img, newer)}><span class="muted">Newer</span>{fmtTime(newer.time)}</a> : <span />}
         </nav>
+        <Versions img={img} current={b.digest} />
       </aside>
     </div>
 

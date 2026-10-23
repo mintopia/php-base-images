@@ -225,7 +225,7 @@ export const builtInModules = (() => {
 
 // README is the single source for configuration docs; the site renders its sections rather than copying them
 const readme = readFileSync(resolve(root, 'README.md'), 'utf8');
-const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', yaml: 'yaml' };
+const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml' };
 export const highlight = (code: string, lang: string) =>
   codeToHtml(code, { lang: LANGS[lang] ?? 'text', theme: 'github-dark' });
 
