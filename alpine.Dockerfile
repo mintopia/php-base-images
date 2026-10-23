@@ -26,7 +26,7 @@ ARG GRPC_VERSION
 RUN --mount=type=bind,source=build,target=/build \
     --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
     --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/alpine-extensions.sh
+    /build/extensions.sh
 
 FROM php:${PHP_VERSION}-fpm-alpine AS ext-builder-nts
 ARG EXTENSIONS
@@ -39,7 +39,7 @@ ARG GRPC_VERSION
 RUN --mount=type=bind,source=build,target=/build \
     --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
     --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/alpine-extensions.sh
+    /build/extensions.sh
 
 # hadolint ignore=DL3006
 FROM ext-builder-${FPM_EXT_BUILDER} AS ext-builder-fpm
