@@ -7,6 +7,7 @@
   --rule: #2a2d31;
   --control: #3a3e44;
   --live: #2fbf6a;
+  --warn: #ff8a3d;
   --l82: #6e4bc8;
   --l83: #00796f;
   --l84: #b8580c;
@@ -127,6 +128,9 @@ td.mono, td .mono { font-size: 13px; }
 .status.old { color: var(--muted); }
 .status.old::before { background: none; border: 1.5px solid var(--muted); }
 
+
+.cve { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--warn); white-space: nowrap; }
+.cve::before { content: '!'; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 10px; font-weight: 700; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--mono); padding: 2px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--raise); white-space: nowrap; }
 .chip.php { border-color: var(--line); }
 

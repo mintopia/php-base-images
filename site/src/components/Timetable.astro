@@ -26,7 +26,7 @@ const php = img.variant !== 'nginx';
             </div></td>
             <td class="mono muted wide" title={r.digest}>{shortDigest(r.digest)}</td>
             <td class="mono wide">{r.commit ? <a href={commitUrl(r.commit)}>{r.commit.slice(0, 7)}</a> : <span class="muted">—</span>}</td>
-            <td>{r.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}</td>
+            <td><div class="changes">{r.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}{r.scan && r.scan.fixable.length > 0 && <span class="cve">{r.scan.fixable.length} fixable CVE{r.scan.fixable.length === 1 ? '' : 's'}</span>}</div></td>
           </tr>
         ))}
       </tbody>

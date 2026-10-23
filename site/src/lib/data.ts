@@ -45,8 +45,21 @@ export interface Change {
   text: string;
 }
 
+export interface Cve {
+  id: string;
+  severity: string;
+  pkg: string;
+  fixed: string;
+}
+
+export interface Scan {
+  fixable: Cve[];
+  unfixed: Record<string, number>;
+}
+
 export interface Build extends BuildRecord {
   changes: Change[];
+  scan: Scan | null;
   live: boolean;
   until: string | null;
 }
@@ -81,6 +94,13 @@ const records: BuildRecord[] = [
       .map((r) => [`${r.image}|${r.os}|${r.variant}|${r.digest}`, r] as const),
   ).values(),
 ];
+
+// written by scripts/scan-cves.sh on each site build; absent when the scan failed
+const cvesFile = process.env.SITE_CVES ?? resolve(root, '.site-data/cves.json');
+const scans: { scanned?: string; builds: Record<string, Scan> } = existsSync(cvesFile)
+  ? JSON.parse(readFileSync(cvesFile, 'utf8'))
+  : { builds: {} };
+export const scannedAt = scans.scanned ?? null;
 
 const COMPONENT = /^net\.mintopia\.(?:ext\.)?([a-z0-9]+)\.version$/;
 const BASE = 'org.opencontainers.image.base.digest';
@@ -133,7 +153,7 @@ function image(version: string, os: string, variant: Variant): Image {
     .map((r, i) => ({ r, changes: diff(mine[i - 1], r) }))
     .filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
   const builds: Build[] = kept
-    .map(({ r, changes }, i) => ({ ...r, changes, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
+    .map(({ r, changes }, i) => ({ ...r, changes, scan: scans.builds[r.digest] ?? null, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
     .reverse();
   const current = builds[0] ?? null;
   const tags = current?.tags ?? fallbackTags(version, os, variant);
@@ -215,6 +235,8 @@ export const repoUrl = 'https://github.com/mintopia/php-base-images';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
+export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
+export const fmtSeverity = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
 export const packageUrl = (repo: string, id?: string) => `${repoUrl}/pkgs/container/${repo.split('/').pop()}${id ? `/${id}` : ''}`;
