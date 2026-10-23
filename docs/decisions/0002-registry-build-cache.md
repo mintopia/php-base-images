@@ -1,6 +1,6 @@
 # Decision: BuildKit cache lives in GHCR, not the GitHub Actions cache
 
-Status: accepted
+Status: superseded
 Date: 2026-10-21
 
 ## Context

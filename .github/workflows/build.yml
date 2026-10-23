@@ -39,6 +39,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # per-arch images and BuildKit cache; only finished multi-arch images go to php/nginx
+  CACHE_IMAGE: ghcr.io/mintopia/php-base-images-cache
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -150,9 +152,7 @@ jobs:
           read -ra targets <<<"$TARGETS"
           sets=()
           for t in "${targets[@]}"; do
-            name=ghcr.io/mintopia/php
-            [ "$t" != nginx ] || name=ghcr.io/mintopia/nginx
-            sets+=(--set "$t.output=type=image,name=$name,push-by-digest=true,name-canonical=true,push=true")
+            sets+=(--set "$t.output=type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true")
           done
           docker buildx bake -f docker-bake.hcl -f versions.json --set '*.tags=' "${sets[@]}" \
             --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
@@ -205,11 +205,9 @@ jobs:
           [ "$VARIANT" != nginx ] || image=ghcr.io/mintopia/nginx
           refs=()
           php=""
-          platforms='{}'
           for arch in amd64 arm64; do
             dir="digests/digests-$VERSION-$OS-$arch"
-            refs+=("$image@$(cat "$dir/$VARIANT")")
-            platforms=$(jq -c --arg a "$arch" --arg d "$(cat "$dir/$VARIANT")" '.[$a] = $d' <<<"$platforms")
+            refs+=("$CACHE_IMAGE@$(cat "$dir/$VARIANT")")
             v=$(cat "$dir/php-version")
             [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
             php=$v
@@ -220,6 +218,8 @@ jobs:
           docker buildx imagetools create "${tags[@]}" "${refs[@]}"
           digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
           cosign sign --yes "$image@$digest"
+          platforms=$(docker buildx imagetools inspect "$image@$digest" --raw \
+            | jq -c '[.manifests[] | select(.platform.os == "linux") | {key: .platform.architecture, value: .digest}] | from_entries')
           modules=$(cat "digests/digests-$VERSION-$OS-amd64/modules-$VARIANT" 2>/dev/null \
             | jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("[") | not))) | unique')
           sizes=$(scripts/image-sizes.sh "$image@$digest")

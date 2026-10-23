@@ -214,7 +214,7 @@ for key in "${selected[@]}"; do
 		for arch in "${archs[@]}"; do
 			lanes=$(jq -c --arg key "$key" --arg os "$os" --arg arch "$arch" --arg targets "${targets[*]}" --argjson vars "$vars" \
 				'. + [{version: $key, os: $os, arch: $arch, targets: $targets,
-					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php:cache-\($key)-\($os)-\($arch)"})}]' <<<"$lanes")
+					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php-base-images-cache:\($key)-\($os)-\($arch)"})}]' <<<"$lanes")
 		done
 
 		[ ${#archs[@]} -eq 2 ] || continue

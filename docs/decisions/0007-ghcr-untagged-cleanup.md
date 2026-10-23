@@ -1,6 +1,6 @@
 # Decision: Delete untagged, unreferenced GHCR images daily
 
-Status: accepted
+Status: superseded
 Date: 2026-10-21
 
 ## Context

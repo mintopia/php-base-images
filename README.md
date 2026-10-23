@@ -28,7 +28,7 @@ rootfs/                # files copied into images: entrypoint, nginx, php-fpm, s
 scripts/               # tag logic, matrix resolution, build records
 tests/smoke.sh         # smoke-tests a built image
 site/                  # the Astro site at php.mintopia.net
-.github/workflows/     # build, lint, cleanup, site
+.github/workflows/     # build, lint, site
 ```
 
 ## Building locally
@@ -48,7 +48,7 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - A monthly job rebuilds everything, as does `workflow_dispatch` with `force`.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - Published manifests are signed with cosign keyless signing. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
-- A daily cleanup deletes untagged images that are more than a day old and that no tag references. Superseded `@sha256:` digests then stop resolving, so pin tags rather than digests. Manual runs of `cleanup` default to a dry run.
+- Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`; the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. Cleanup of the cache package lives in [php-base-images-cache](https://github.com/mintopia/php-base-images-cache).
 
 ### PHP source
 
