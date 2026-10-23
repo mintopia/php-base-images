@@ -145,7 +145,10 @@ jobs:
       - name: Record PHP version
         run: |
           mkdir -p digests
-          docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-cli" -r 'echo PHP_VERSION;' > digests/php-version
+          : > digests/php-version
+          for t in $TARGETS; do
+            [ "$t" = nginx ] || { docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -r 'echo PHP_VERSION;' > digests/php-version; break; }
+          done
           cat digests/php-version
           for t in $TARGETS; do
             [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
