@@ -33,6 +33,7 @@ variable "GRPC_VERSION" { default = "" }
 variable "REDIS_VERSION" { default = "6.3.0" }
 variable "APCU_VERSION" { default = "5.1.28" }
 variable "IGBINARY_VERSION" { default = "3.2.17RC1" }
+variable "MONGODB_VERSION" { default = "2.5.5" }
 variable "OPENTELEMETRY_VERSION" { default = "1.4.2" }
 variable "PROTOBUF_VERSION" { default = "35.1" }
 
@@ -126,6 +127,7 @@ target "_common" {
     REDIS_VERSION         = REDIS_VERSION
     APCU_VERSION          = APCU_VERSION
     IGBINARY_VERSION      = IGBINARY_VERSION
+    MONGODB_VERSION       = MONGODB_VERSION
     OPENTELEMETRY_VERSION = OPENTELEMETRY_VERSION
     PROTOBUF_VERSION      = PROTOBUF_VERSION
     EXTENSIONS            = join(" ", VERSIONS[PHP_VERSION].extensions)
@@ -139,6 +141,7 @@ target "_common" {
       redis         = REDIS_VERSION
       apcu          = APCU_VERSION
       igbinary      = IGBINARY_VERSION
+      mongodb       = MONGODB_VERSION
       opentelemetry = OPENTELEMETRY_VERSION
       protobuf      = PROTOBUF_VERSION
     } : "net.mintopia.ext.${ext}.version" => version if contains(VERSIONS[PHP_VERSION].extensions, ext)

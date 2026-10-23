@@ -68,6 +68,7 @@ A series of PHP base images.
  - soap
  - apcu
  - igbinary
+ - mongodb
 
 #### Security
 

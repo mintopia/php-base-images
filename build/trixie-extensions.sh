@@ -14,6 +14,7 @@ for ext in $EXTENSIONS; do
 		apcu) pie="$pie apcu/apcu:$APCU_VERSION" ;;
 		# PECL marks 3.2.17RC1 as its stable release, the only one on Packagist
 		igbinary) pie="$pie igbinary/igbinary:$IGBINARY_VERSION" redis_opts=--enable-redis-igbinary ;;
+		mongodb) pie="$pie mongodb/mongodb-extension:$MONGODB_VERSION" ;;
 		opentelemetry) pie="$pie open-telemetry/ext-opentelemetry:$OPENTELEMETRY_VERSION" ;;
 		protobuf) pie="$pie pie-extensions/protobuf:$PROTOBUF_VERSION" ;;
 		*) bundled="$bundled $ext" ;;
@@ -22,7 +23,7 @@ done
 
 # php-src images ship no compiler, and install-php-extensions expects one
 apt-get update
-apt-get install -y --no-install-recommends $PHPIZE_DEPS ca-certificates git libgrpc-dev libtool libwebp-dev unzip
+apt-get install -y --no-install-recommends $PHPIZE_DEPS ca-certificates git libgrpc-dev libssl-dev libtool libwebp-dev unzip
 install-php-extensions $bundled
 
 for package in $pie; do

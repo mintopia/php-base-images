@@ -93,11 +93,12 @@ nginx_key=$(for key in "${selected[@]}"; do jq -r --arg k "$key" 'select(.[$k].s
 redis=$(packagist phpredis/phpredis)
 apcu=$(packagist apcu/apcu)
 igbinary=$(pecl_stable igbinary)
+mongodb=$(packagist mongodb/mongodb-extension)
 otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
-common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg igbinary "$igbinary" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
-	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, APCU_VERSION: $apcu, IGBINARY_VERSION: $igbinary, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
+common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg igbinary "$igbinary" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
+	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, APCU_VERSION: $apcu, IGBINARY_VERSION: $igbinary, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -120,7 +121,7 @@ done
 expected_labels() {
 	jq -c -n --arg v "$1" --argjson vars "$2" --argjson exts "$3" '
 		($vars.PHP_SOURCE == "src" and $v != "nginx") as $src
-		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", igbinary: "IGBINARY_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
+		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", igbinary: "IGBINARY_VERSION", mongodb: "MONGODB_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
 		| {cli: "ZTS_DIGEST", frankenphp: "FRANKENPHP_DIGEST", "php-fpm": "FPM_DIGEST", "php-fpm-nginx": "FPM_DIGEST", nginx: "NGINX_BASE_DIGEST"} as $base
 		| {"org.opencontainers.image.base.digest": $vars[if $src then "NGINX_BASE_DIGEST" else $base[$v] end]}
 		+ (if $src then {"net.mintopia.php.source": "php-src", "net.mintopia.php.tag": $vars.PHP_TAG} else {} end)
