@@ -10,7 +10,7 @@ const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map(
   <div class="page">
     <header class="page-head">
       <h1>Changelog</h1>
-      <p>Image changes are read from the recorded builds: new PHP releases, extension and component updates, and rebuilds for OS package fixes. Commits to the repository sit beside them.</p>
+      <p>Image changes are read from the recorded builds: new PHP releases, extension and component updates, and rebuilds for OS package fixes. Each day's repository commits fold away beneath them.</p>
     </header>
 
     <ol class="days">
@@ -24,7 +24,7 @@ const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map(
                   <li>
                     <span class:list={['what', c.kind]}>{c.text}</span>
                     <span class="where">
-                      {lines(c.images).map((l) => (l === 'nginx' ? <span class="bullet sm nginx-b">nginx</span> : <Bullet version={l} size="sm" />))}
+                      {lines(c.images).map((l) => (l === 'nginx' ? <span class="bullet sm nginx">nginx</span> : <Bullet version={l} size="sm" />))}
                       <span class="muted">{c.images.length} {c.images.length === 1 ? 'image' : 'images'}</span>
                     </span>
                   </li>
@@ -32,11 +32,14 @@ const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map(
               </ul>
             )}
             {d.commits.length > 0 && (
-              <ul class="commits">
-                {d.commits.map((c) => (
-                  <li><a class="mono" href={commitUrl(c.sha)}>{c.sha.slice(0, 7)}</a> {c.subject}</li>
-                ))}
-              </ul>
+              <details class="commits">
+                <summary>{d.commits.length} repository {d.commits.length === 1 ? 'commit' : 'commits'}</summary>
+                <ul>
+                  {d.commits.map((c) => (
+                    <li><a class="mono" href={commitUrl(c.sha)}>{c.sha.slice(0, 7)}</a> {c.subject}</li>
+                  ))}
+                </ul>
+              </details>
             )}
           </div>
         </li>
@@ -49,19 +52,22 @@ const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map(
   .days { list-style: none; max-width: 1040px; }
   .day { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 32px; padding: 28px 0; border-top: 1px solid var(--rule); }
   .day:first-child { border-top: 2px solid var(--ink); }
-  .date { font: 500 14px var(--mono); text-transform: none; letter-spacing: 0; margin: 0; }
+  .date { font: 500 0.875rem var(--mono); text-transform: none; letter-spacing: 0; margin: 0; }
   .entries { display: grid; gap: 20px; }
-  .changes, .commits { list-style: none; display: grid; gap: 10px; }
+  .changes, .commits ul { list-style: none; display: grid; gap: 10px; }
+  .commits summary { width: fit-content; cursor: pointer; font-size: 0.8125rem; }
+  .commits summary:hover { color: var(--ink); }
+  .commits[open] summary { margin-bottom: 10px; }
   .changes li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
   .what { font-weight: 500; }
   .what.php { font-weight: 700; }
   .what.rebuild, .what.base { font-weight: 400; }
-  .where { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+  .where { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8125rem; }
   .where .muted { margin-left: 4px; }
-  .nginx-b { background: var(--ink); color: var(--bg); }
-  .commits { font-size: 14px; color: var(--muted); }
-  .commits a { color: var(--ink); margin-right: 8px; font-size: 13px; }
+  .commits { font-size: 0.875rem; color: var(--muted); }
+  .commits a { color: var(--ink); margin-right: 8px; font-size: 0.8125rem; }
   @media (max-width: 640px) {
     .day { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .commits summary { padding: 12px 0; }
   }
 </style>

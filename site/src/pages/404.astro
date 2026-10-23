@@ -1,0 +1,52 @@
+---
+import Base from '../layouts/Base.astro';
+import Picker from '../components/Picker.astro';
+import { pages } from '../lib/data';
+
+const base = import.meta.env.BASE_URL;
+const ids = pages.map((i) => i.id);
+---
+<Base title="Not found · mintopia/php" description="No page at this address. Pick an image instead.">
+  <div class="page">
+    <header class="page-head">
+      <h1>No page at this address</h1>
+      <p>The address may be mistyped, or the page has moved. Pick an image on the board below, or go to <a href={`${base}images/`}>Images</a> or <a href={`${base}usage/`}>Usage</a>.</p>
+      <p id="guess" hidden>Did you mean <a class="mono" href=""></a>?</p>
+    </header>
+  </div>
+  <Picker />
+  <script is:inline define:vars={{ ids, base }}>
+    // closest built image id to a mistyped /images/<id>/ path, by edit distance
+    const m = location.pathname.match(/\/images\/([^/]+)/);
+    if (m) {
+      const want = decodeURIComponent(m[1]).toLowerCase();
+      const dist = (a, b) => {
+        let row = [...Array(b.length + 1).keys()];
+        for (let i = 1; i <= a.length; i++) {
+          let prev = row[0]++;
+          for (let j = 1; j <= b.length; j++) {
+            const cur = row[j];
+            row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+            prev = cur;
+          }
+        }
+        return row[b.length];
+      };
+      const [best, d] = ids.map((id) => [id, dist(want, id)]).sort((x, y) => x[1] - y[1])[0];
+      if (d <= Math.max(2, want.length / 3)) {
+        const p = document.getElementById('guess');
+        const a = p.querySelector('a');
+        a.href = `${base}images/${best}/`;
+        a.textContent = best;
+        p.hidden = false;
+      }
+    }
+  </script>
+</Base>
+
+<style>
+  .page { padding-bottom: 40px; }
+  .page-head { margin-bottom: 0; }
+  .page-head p + p { margin-top: 8px; }
+  .page-head a { color: var(--ink); }
+</style>

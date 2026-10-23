@@ -7,7 +7,7 @@ const top = img.parent ?? img;
 const releases = top.variant === 'nginx' ? [] : chain(top).filter((i) => i.current);
 ---
 {releases.length > 1 && <>
-  <h2>Patches</h2>
+  <h2>Patch releases</h2>
   <dl class="facts releases">
     {releases.map((p) => <div><dt><a class="mono" href={imagePath(p)} aria-current={p.id === img.id ? 'page' : undefined}>{p.patch ?? p.current!.php}</a></dt><dd>{fmtDate(p.current!.time)}</dd></div>)}
   </dl>

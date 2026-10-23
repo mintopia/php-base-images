@@ -8,9 +8,11 @@ import Aliases from '../../../components/Aliases.astro';
 import CveFix from '../../../components/CveFix.astro';
 import LiveLink from '../../../components/LiveLink.astro';
 import Versions from '../../../components/Versions.astro';
+import Pins from '../../../components/Pins.astro';
+import { pinRef } from '../../../lib/pin';
 import CveTable from '../../../components/CveTable.astro';
 import CveSummary from '../../../components/CveSummary.astro';
-import { pages, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
+import { pages, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, imageName, imageHost, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
   return pages.flatMap((img) =>
@@ -22,26 +24,27 @@ export function getStaticPaths() {
 }
 const { img, b, newer, older } = Astro.props as { img: Image; b: Build; newer: Build | null; older: Build | null };
 const base = import.meta.env.BASE_URL;
-const pinned = b.live ? `${img.repo}:${img.tag}@${b.digest}` : `${img.repo}@${b.digest}`;
+const pinned = pinRef(img, b);
 const run = runUrl(b.run);
 const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
 ---
-<Base title={`${img.tag} · ${fmtTime(b.time)} · mintopia/php`} description={`Build of ${img.repo}:${img.tag} on ${fmtTime(b.time)} UTC, digest ${shortDigest(b.digest)}.`} current="images">
+<Base title={`${imageName(img)} · ${fmtTime(b.time)} · ${img.repo.replace('ghcr.io/', '')}`} description={`Build of ${img.repo}:${img.tag} on ${fmtTime(b.time)} UTC, digest ${shortDigest(b.digest)}.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
     <div class="dest-band">
       <nav class="crumbs" aria-label="Breadcrumb">
-        <a href={`${base}images/`}>Images</a><span>/</span><a href={imagePath(img)}>{img.tag}</a><span>/</span><span aria-current="page">{shortDigest(b.digest)}</span>
+        <a href={`${base}images/`}>Images</a><span>/</span><a href={imagePath(img)}>{imageName(img)}</a><span>/</span><span aria-current="page">{shortDigest(b.digest)}</span>
       </nav>
       <div class="dest">
         {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
-        <h1><small>{img.repo}{b.live ? '' : <> · was {img.tag}</>} · built {fmtTime(b.time)} UTC<span class="sr-only">, </span></small>{b.live ? img.tag : shortDigest(b.digest)}</h1>
-        <Copy text={pinned} label="Copy pinned reference" primary />
+        <h1><small>{imageHost(img)} · built {fmtTime(b.time)} UTC<span class="sr-only">, </span></small>{imageName(img)}</h1>
+        <Pins img={img} b={b} />
       </div>
       <div class="tracks">
+        <code>{shortDigest(b.digest)}</code>
         {b.live ? <span class="status">Live</span> : <span class="status old">Superseded {newer && <>on {fmtTime(newer.time)} by <a href={buildPath(img, newer)}>{shortDigest(newer.digest)}</a></>}</span>}
         {!b.live && <LiveLink img={img} skip={newer?.digest} />}
         {b.tags.length > 0 && <span class="muted">· tagged</span>}
-        <Aliases img={img} tags={b.tags.filter((t) => t !== img.tag)} />
+        <Aliases tags={b.tags.filter((t) => t !== img.tag)} />
       </div>
       <Unstable img={img} />
       {!b.live && <p class="note">Tags have moved on from this build. It stays pullable by digest.</p>}
@@ -65,8 +68,8 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
 
         <h2>Provenance</h2>
         <dl class="refs">
-          <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
-          <div><dt>Commit</dt><dd>{b.commit ? <a class="mono" href={commitUrl(b.commit)}>{b.commit}</a> : <span class="muted">not recorded</span>}</dd></div>
+          <div><dt>Pinned</dt><dd><code tabindex="0">{pinned}</code><Copy text={pinned} /></dd></div>
+          <div><dt>Commit</dt><dd>{b.commit ? <a class="mono" href={commitUrl(b.commit)}>{b.commit}</a> : <span class="muted">Not recorded</span>}</dd></div>
           <div><dt>Workflow run</dt><dd>{run ? <a href={run}>{b.run}</a> : <span class="muted">Not linked; recorded from the published package</span>}</dd></div>
           <div><dt>Package</dt><dd><a href={packageUrl(img.repo, b.package)}>View on GitHub</a></dd></div>
         </dl>
@@ -78,11 +81,18 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
             <p class="note">Highlighted modules are added by these images; the rest are built into PHP.</p>
           </>
         )}
+        {!b.modules?.length && img.variant !== 'nginx' && (
+          <>
+            <h2>PHP modules</h2>
+            <p class="note">Not recorded for this build</p>
+          </>
+        )}
 
-        <details class="more-labels">
-        <summary><h2>Labels <span class="muted count">{Object.keys(b.labels).length}</span></h2></summary>
+        <h2 id="labels">Labels <span class="muted count">{Object.keys(b.labels).length}</span></h2>
+        <details class="label-list">
+        <summary aria-describedby="labels">Show all labels</summary>
         <div class="table-wrap">
-          <table class="labels">
+          <table class="labels" aria-labelledby="labels">
             <tbody>
               {Object.entries(b.labels).sort(([x], [y]) => x.localeCompare(y)).map(([k, v]) => (
                 <tr><th scope="row" class="mono">{k}</th><td class="mono">{v}</td></tr>
@@ -96,11 +106,21 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
         <h2>In this build</h2>
         <Facts build={b} />
         <nav class="build-nav" aria-label="Builds">
-          {older ? <a href={buildPath(img, older)}><span class="muted">Older</span>{fmtTime(older.time)}</a> : <span />}
-          {newer ? <a href={buildPath(img, newer)}><span class="muted">Newer</span>{fmtTime(newer.time)}</a> : <span />}
+          {older ? <a href={buildPath(img, older)}><span class="muted">Older</span>{fmtTime(older.time)}</a> : <span class="none"><span class="muted">Older</span>None</span>}
+          {newer ? <a href={buildPath(img, newer)}><span class="muted">Newer</span>{fmtTime(newer.time)}</a> : <span class="none"><span class="muted">Newer</span>This is the live build</span>}
         </nav>
         <Versions img={img} />
       </aside>
     </div>
   </div>
 </Base>
+
+<style>
+  .build-nav { display: grid; grid-template-columns: 1fr 1fr; }
+  .build-nav > :last-child { text-align: right; }
+  .none { display: grid; gap: 2px; font-size: 0.8125rem; color: var(--muted); }
+  .label-list summary { cursor: pointer; color: var(--muted); font-size: 0.8125rem; width: fit-content; }
+  .label-list summary:hover { color: var(--ink); }
+  .label-list[open] summary { margin-bottom: 12px; }
+  @media (pointer: coarse) { .label-list summary { padding: 10px 0; } }
+</style>

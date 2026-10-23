@@ -13,7 +13,8 @@ const cveUrl = (c: Cve) => c.url ?? (c.id.startsWith('CVE-') ? `https://nvd.nist
 ---
 <div class="table-wrap">
   <table class="cves">
-    <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th>{live && <th>Live build</th>}</tr></thead>
+    <caption class="sr-only">Critical CVEs</caption>
+    <thead><tr><th scope="col">CVE</th><th scope="col">Severity</th><th scope="col">Package</th><th scope="col">Fixed in</th>{live && <th scope="col">Live build</th>}</tr></thead>
     <tbody>
       {cves.map((c) => {
         const page = c.pkg === 'php' ? fixPage(c.fixed) : null;

@@ -6,6 +6,9 @@ import { latestStable, readmeTable } from '../../lib/data';
 const v = latestStable;
 const php = 'ghcr.io/mintopia/php';
 const proxyRanges = await readmeTable('| In front of the container |');
+const verify = `cosign verify ${php}:${v} \\
+  --certificate-identity-regexp '^https://github\\.com/mintopia/php-base-images/\\.github/workflows/' \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com`;
 
 const one = `services:
   app:
@@ -140,6 +143,9 @@ const toc = [
     ['xdebug', 'Xdebug'],
     ['frankenphp-reload', 'Reloading FrankenPHP workers'],
   ]],
+  ['verify', 'Verify', [
+    ['signature', 'Verify the signature'],
+  ]],
 ] as const;
 ---
 <Base title="Usage · mintopia/php" description="How to run, configure and extend the images, with compose files and Dockerfiles." current="usage">
@@ -151,20 +157,28 @@ const toc = [
 
     <div class="docs">
       <nav class="toc" aria-label="On this page">
-        {toc.map(([id, label, items]) => (
-          <div>
-            <a class="toc-head" href={`#${id}`}>{label}</a>
-            {items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+        <details open>
+          <summary>On this page</summary>
+          <script is:inline>
+            { const d = document.currentScript.parentElement, m = matchMedia('(max-width: 719.98px)'), f = () => { d.open = !m.matches; }; f(); m.addEventListener('change', f); }
+          </script>
+          <div class="toc-list">
+            {toc.map(([id, label, items]) => (
+              <div>
+                <a class="toc-head" href={`#${id}`}>{label}</a>
+                {items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
       </nav>
 
       <div class="docs-body prose">
         <h2 id="run">Run</h2>
         <p>Pick the Variant that matches how your app takes requests.</p>
-        <div class="table-wrap">
-          <table class="shapes">
-            <thead><tr><th>You need</th><th>Variant</th></tr></thead>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Which variant to use">
+          <table class="shapes" aria-labelledby="run">
+            <thead><tr><th scope="col">You need</th><th scope="col">Variant</th></tr></thead>
             <tbody>
               <tr><td><a href="#one-container">One container serving a PHP app over HTTP</a></td><td><code>php-fpm-nginx</code> or <code>frankenphp</code></td></tr>
               <tr><td><a href="#two-containers">Web server and PHP scaled separately</a></td><td><code>nginx</code> + <code>php-fpm</code></td></tr>
@@ -236,7 +250,7 @@ const toc = [
         <p>Settings are environment variables read when the container starts. These are the ones most setups change; the <a href="https://github.com/mintopia/php-base-images#configuration">README</a> lists every one.</p>
 
         <section id="proxies">
-          <h3>Behind a proxy</h3>
+          <h3 id="proxy-h">Behind a proxy</h3>
           <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Your framework can trust every proxy safely. Switch the setting to see what PHP receives.</p>
           <div class="demo">
             <div class="seg" role="radiogroup" aria-label="TRUSTED_PROXIES">
@@ -257,9 +271,9 @@ const toc = [
                 </div>
               </div>
             </figure>
-            <div class="table-wrap">
-              <table class="server">
-                <thead><tr><th>$_SERVER</th><th>PHP sees</th></tr></thead>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Proxy $_SERVER values">
+              <table class="server" aria-labelledby="proxy-h">
+                <thead><tr><th scope="col">$_SERVER</th><th scope="col">PHP sees</th></tr></thead>
                 <tbody>
                   <tr><td class="mono">REMOTE_ADDR</td><td class="mono"><span class="yes">203.0.113.7</span><span class="no">172.18.0.2</span></td></tr>
                   <tr><td class="mono">HTTPS</td><td class="mono"><span class="yes">on</span><span class="no">(empty)</span></td></tr>
@@ -272,17 +286,17 @@ const toc = [
           </div>
           <Code lang="compose.yaml" code={proxied} />
           <h4>What to trust</h4>
-          <div class="ranges"><Fragment set:html={proxyRanges} /></div>
+          <div class="ranges table-wrap" tabindex="0" role="region" aria-label="Trusted proxy ranges"><Fragment set:html={proxyRanges} /></div>
           <p class="muted">With several proxies in a chain, list every hop's range. Never trust <code>0.0.0.0/0</code> in production.</p>
         </section>
 
         <section id="hardened">
-          <h3>Non-root, read-only</h3>
+          <h3 id="hardened-h">Non-root, read-only</h3>
           <p>Every image runs with a read-only root filesystem and no capabilities, given a tmpfs where the variant writes. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
           <Code lang="compose.yaml" code={hardened} />
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Variant</th><th>Writable tmpfs</th></tr></thead>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Writable tmpfs by variant">
+            <table aria-labelledby="hardened-h">
+              <thead><tr><th scope="col">Variant</th><th scope="col">Writable tmpfs</th></tr></thead>
               <tbody>
                 <tr><td><code>cli</code></td><td>none, or <code>/tmp</code> if the app writes temp files</td></tr>
                 <tr><td><code>php-fpm</code></td><td><code>/run</code>, and <code>/tmp</code> for sessions and uploads</td></tr>
@@ -302,11 +316,11 @@ const toc = [
         </section>
 
         <section id="logs">
-          <h3>Logs</h3>
+          <h3 id="logs-h">Logs</h3>
           <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing is written to files in the container.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Variant</th><th>stdout</th><th>stderr</th></tr></thead>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Log output by variant">
+            <table aria-labelledby="logs-h">
+              <thead><tr><th scope="col">Variant</th><th scope="col">stdout</th><th scope="col">stderr</th></tr></thead>
               <tbody>
                 <tr><td><code>cli</code></td><td>the script's output</td><td>PHP errors and warnings</td></tr>
                 <tr><td><code>php-fpm</code></td><td>nothing</td><td>php-fpm's log, an access line per request, and PHP errors</td></tr>
@@ -380,6 +394,16 @@ const toc = [
           <p>FrankenPHP restarts worker scripts when files they watch change. Spread the worker block over several lines.</p>
           <Code lang="compose.yaml" code={reload} />
         </section>
+
+        <h2 id="verify">Verify</h2>
+        <p>Every image is signed with cosign, keyless, by this repository's GitHub Actions workflow.</p>
+
+        <section id="signature">
+          <h3>Verify the signature</h3>
+          <p>Check a tag before you pull or deploy it. The same command works for <code>ghcr.io/mintopia/nginx</code>.</p>
+          <Code lang="shell" code={verify} />
+          <p class="muted">The signature is on the multi-arch index, so verify a tag or the index digest, not a single architecture's digest.</p>
+        </section>
       </div>
     </div>
   </div>
@@ -394,20 +418,20 @@ const toc = [
   .ranges :global(td code) { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
 
   .route { display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; margin: 24px 0 16px; padding: 40px 24px 28px; background: var(--board); border-radius: 12px; overflow-x: auto; }
-  .stop { flex: none; display: grid; align-content: center; gap: 2px; min-width: 104px; min-height: 64px; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--raise); font-weight: 700; font-size: 14px; text-align: center; }
-  .stop small { font: 500 12px var(--mono); color: var(--muted); }
+  .stop { flex: none; display: grid; align-content: center; gap: 2px; min-width: 104px; min-height: 64px; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--raise); font-weight: 700; font-size: 0.875rem; text-align: center; }
+  .stop small { font: 500 0.75rem var(--mono); color: var(--muted); }
   .stop.ext { border-style: dashed; border-color: var(--muted); font-weight: 500; }
   .stop.php { border-color: var(--line); }
-  .hop { flex: 1 1 64px; max-width: 180px; position: relative; height: 3px; background: var(--line); margin: 0 4px; }
-  .hop::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--line); border-right: 0; }
-  .hop span { display: block; position: relative; top: -20px; height: 0; padding: 0 14px; text-align: center; font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+  .hop { flex: 1 1 64px; max-width: 180px; position: relative; height: 3px; background: var(--ink); margin: 0 4px; }
+  .hop::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--ink); border-right: 0; }
+  .hop span { display: block; position: relative; top: -20px; height: 0; padding: 0 14px; text-align: center; font: 500 0.75rem var(--mono); color: var(--muted); white-space: nowrap; }
   .ctr { position: relative; display: flex; padding: 20px 16px 16px; border: 1px solid var(--control); border-radius: 14px; background: var(--bg); flex: none; }
-  .ctr-tag { position: absolute; top: -10px; left: 12px; font: 500 11px var(--mono); padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--bg); white-space: nowrap; }
+  .ctr-tag { position: absolute; top: -10px; left: 12px; font: 500 0.75rem var(--mono); padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--bg); white-space: nowrap; }
   .ctr-row { display: flex; align-items: center; }
   .ctr-row .hop { min-width: 120px; }
 
   .demo { margin: 24px 0; }
-  .demo .seg code { font-size: 12px; margin-left: 6px; background: none; padding: 0; }
+  .demo .seg code { font-size: 0.75rem; margin-left: 6px; background: none; padding: 0; }
   .demo .seg label { display: flex; white-space: nowrap; }
   .demo:has(input[value='yes']:checked) .no, .demo:has(input[value='no']:checked) .yes { display: none; }
   .demo .server td:last-child span { font-weight: 700; color: var(--accent-text); }
@@ -423,7 +447,7 @@ const toc = [
     .ctr { flex-direction: column; padding-top: 24px; }
     .ctr-tag { right: 12px; justify-self: start; width: fit-content; max-width: calc(100% - 24px); white-space: normal; overflow-wrap: anywhere; }
     .hop, .ctr-row .hop { flex: none; width: 3px; min-width: 0; max-width: none; height: 40px; margin: 4px auto 16px; }
-    .hop::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--line); border-bottom: 0; }
+    .hop::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--ink); border-bottom: 0; }
     .hop span { position: absolute; height: auto; padding: 0; top: 50%; left: 14px; transform: translateY(-50%); }
   }
 </style>

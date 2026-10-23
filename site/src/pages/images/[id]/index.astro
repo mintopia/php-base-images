@@ -12,7 +12,7 @@ import Picker from '../../../components/Picker.astro';
 import Versions from '../../../components/Versions.astro';
 import CveTable from '../../../components/CveTable.astro';
 import CveSummary from '../../../components/CveSummary.astro';
-import { pages, type Image, buildPath, imagePath } from '../../../lib/data';
+import { pages, type Image, buildPath, imagePath, imageName, imageHost } from '../../../lib/data';
 
 export function getStaticPaths() {
   return pages.map((img) => ({ params: { id: img.id }, props: { img } }));
@@ -25,19 +25,19 @@ const crit = cur?.cves?.filter((c) => c.severity === 'CRITICAL') ?? [];
 const pinned = cur ? `${ref}@${cur.digest}` : null;
 const aliases = img.tags.filter((t) => t !== img.tag);
 ---
-<Base title={`${img.tag} · mintopia/php`} description={`${ref}: how to use it, what is in it and every recorded build.`} current="images">
+<Base title={`${imageName(img)} · ${img.repo.replace('ghcr.io/', '')}`} description={`${ref}: how to use it, what is in it and every recorded build.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
     <Picker img={img} />
     <div class="dest-band">
       <div class="dest">
         {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
-        <h1><small>{img.repo}<span class="sr-only">:</span></small>{img.tag}</h1>
+        <h1><small>{imageHost(img)}<span class="sr-only">{img.variant === 'nginx' ? '/' : ':'}</span></small>{imageName(img)}</h1>
         <Copy text={ref} label="Copy reference" primary />
       </div>
       {aliases.length > 0 && (
         <div class="tracks">
           <span class="muted">Also tagged</span>
-          <Aliases img={img} tags={aliases} />
+          <Aliases tags={aliases} />
         </div>
       )}
       <Unstable img={img} />
@@ -57,8 +57,8 @@ const aliases = img.tags.filter((t) => t !== img.tag);
         <h2>Use it</h2>
         <dl class="refs">
           {pinned
-            ? <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
-            : <div><dt>Image</dt><dd><code>{ref}</code></dd><Copy text={ref} /></div>}
+            ? <div><dt>Pinned</dt><dd><code tabindex="0">{pinned}</code><Copy text={pinned} /></dd></div>
+            : <div><dt>Image</dt><dd><code tabindex="0">{ref}</code><Copy text={ref} /></dd></div>}
         </dl>
         <Examples img={img} ref={ref} />
         <CveSummary img={img} build={cur} />

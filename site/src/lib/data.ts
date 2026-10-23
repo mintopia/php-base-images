@@ -143,7 +143,7 @@ function diff(prev: BuildRecord | undefined, cur: BuildRecord): Change[] {
     const name = cur.labels['org.opencontainers.image.base.name']?.replace('docker.io/library/', '');
     out.push({ kind: 'base', text: name ? `${name} base image updated` : 'New OS base image' });
   }
-  if (out.length === 0) out.push({ kind: 'rebuild', text: 'Rebuilt with the same PHP and extension versions' });
+  if (out.length === 0) out.push({ kind: 'rebuild', text: cur.variant === 'nginx' ? 'Rebuilt with the same versions' : 'Rebuilt with the same PHP and extension versions' });
   return out;
 }
 
@@ -287,6 +287,9 @@ export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
 export const packageUrl = (repo: string, id?: string) => `${repoUrl}/pkgs/container/${repo.split('/').pop()}${id ? `/${id}` : ''}`;
 export const commitUrl = (sha: string) => `${repoUrl}/commit/${sha}`;
+export const imageName = (img: Image) => (img.variant === 'nginx' ? `nginx:${img.tag}` : img.tag);
+// registry path shown above imageName in headings
+export const imageHost = (img: Image) => (img.variant === 'nginx' ? img.repo.replace(/\/nginx$/, '') : img.repo);
 export const imagePath = (img: Image) => `${import.meta.env.BASE_URL}images/${img.id}/`;
 export const buildPath = (img: Image, b: BuildRecord) => `${imagePath(img)}${shortDigest(b.digest)}/`;
 export const runUrl = (run: string) => (/^\d+$/.test(run) ? `${repoUrl}/actions/runs/${run}` : null);

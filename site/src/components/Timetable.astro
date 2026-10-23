@@ -11,7 +11,8 @@ const php = img.variant !== 'nginx';
 ) : (
   <div class="table-wrap">
     <table class="timetable">
-      <thead><tr><th>Built (UTC)</th>{php && <th class="php-col">PHP</th>}<th>Change</th><th class="wide">Digest</th><th class="wide">Commit</th><th>Status</th></tr></thead>
+      <caption class="sr-only">Build history</caption>
+      <thead><tr><th scope="col">Built (UTC)</th>{php && <th scope="col" class="php-col">PHP</th>}<th scope="col">Change</th><th scope="col" class="wide">Digest</th><th scope="col" class="wide">Commit</th><th scope="col">Status</th></tr></thead>
       <tbody>
         {img.builds.map((r) => (
           <tr class:list={{ live: r.live, here: r.digest === current }}>

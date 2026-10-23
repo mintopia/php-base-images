@@ -1,14 +1,16 @@
 ---
 import '../styles/site.css';
+import { Font } from 'astro:assets';
 import { versionKeys, repoUrl } from '../lib/data';
 
 interface Props {
   title: string;
   description: string;
-  current: 'home' | 'images' | 'matrix' | 'usage' | 'changelog';
+  current?: 'home' | 'images' | 'matrix' | 'usage' | 'changelog';
 }
 const { title, description, current } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const nav = [
   ['images', 'Images', `${base}images/`],
   ['matrix', 'Matrix', `${base}matrix/`],
@@ -25,16 +27,23 @@ const nav = [
     <meta name="description" content={description} />
     <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
     <link rel="alternate" href={`${base}llms.txt`} type="text/plain" title="llms.txt" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="apple-touch-icon" href={`${base}apple-touch-icon.png`} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="mintopia/php" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <Font cssVariable="--font-hanken" preload />
+    <Font cssVariable="--font-jbmono" preload />
   </head>
   <body>
     <a class="skip" href="#content">Skip to content</a>
     <header class="site-header">
       <a class="brand" href={base}>
         <span class="brand-lines" aria-hidden="true">
-          {versionKeys.map((v) => <i data-line={v} style="background: var(--line)" />)}
+          {versionKeys.map((v) => <i data-line={v} />)}
         </span>
         mintopia/php
       </a>
@@ -61,9 +70,12 @@ const nav = [
           status.textContent = 'Copy failed. Select the text and copy it manually.';
           return;
         }
-        status.textContent = 'Copied';
+        if (btn.hasAttribute('data-copied')) return;
+        const label = btn.querySelector('.label')!;
+        const was = label.textContent;
+        label.textContent = status.textContent = 'Copied';
         btn.dataset.copied = '';
-        setTimeout(() => { delete btn.dataset.copied; status.textContent = ''; }, 1400);
+        setTimeout(() => { delete btn.dataset.copied; label.textContent = was; status.textContent = ''; }, 1400);
       });
     </script>
   </body>

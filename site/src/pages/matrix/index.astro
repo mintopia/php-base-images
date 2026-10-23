@@ -14,20 +14,20 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
     </header>
 
     <section>
-      <h2>Added extensions</h2>
-      <div class="table-wrap">
-        <table class="grid">
-          <thead><tr><th>Extension</th>{versionKeys.map((v) => <th><Bullet version={v} size="sm" /></th>)}</tr></thead>
+      <h2 id="added-h">Added extensions</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Added extensions by PHP version">
+        <table class="grid" aria-labelledby="added-h">
+          <thead><tr><th scope="col">Extension</th>{versionKeys.map((v) => <th scope="col"><Bullet version={v} size="sm" /></th>)}</tr></thead>
           <tbody>
             {extensions.map((ext) => (
               <tr>
                 <th scope="row" class="mono">{ext}</th>
                 {versionKeys.map((v) => {
                   const why = versions[v].dropped?.[ext];
-                  if (why) return <td class="off" title={why}><span class="struck">not built</span><sup>†</sup></td>;
-                  if (!versions[v].extensions.includes(ext)) return <td class="muted">—</td>;
+                  if (why) return <td class="off" title={why}><span class="struck">not built</span><sup>†</sup><span class="sr-only">: {why}</span></td>;
+                  if (!versions[v].extensions.includes(ext)) return <td class="muted"><span aria-hidden="true">—</span><span class="sr-only">not included</span></td>;
                   const ver = extensionVersion(v, ext);
-                  return <td class="on" data-line={v}>{ver ? <span class="mono">{ver}</span> : <span class="dot" aria-label="bundled" />}</td>;
+                  return <td class="on" data-line={v}>{ver ? <span class="mono">{ver}</span> : <><span class="dot" aria-hidden="true" /><span class="sr-only">bundled</span></>}</td>;
                 })}
               </tr>
             ))}
@@ -42,23 +42,23 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
     </section>
 
     <section>
-      <h2>Built into PHP</h2>
+      <h2 id="builtin-h">Built into PHP</h2>
       {builtInModules.length === 0 ? (
         <p class="notes">The full module list appears once builds have recorded <code>php -m</code>.</p>
       ) : (
         <>
           <p class="notes lead">Every module compiled into PHP itself, read from <code>php -m</code> on the current cli images.</p>
-          <div class="table-wrap">
-            <table class="grid">
-              <thead><tr><th>Module</th>{versionKeys.map((v) => <th><Bullet version={v} size="sm" /></th>)}</tr></thead>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Built-in modules by PHP version">
+            <table class="grid" aria-labelledby="builtin-h">
+              <thead><tr><th scope="col">Module</th>{versionKeys.map((v) => <th scope="col"><Bullet version={v} size="sm" /></th>)}</tr></thead>
               <tbody>
                 {builtInModules.map(([m, byVersion]) => (
                   <tr>
                     <th scope="row" class="mono">{m}</th>
                     {versionKeys.map((v) => {
                       const oses = byVersion.get(v) ?? [];
-                      if (oses.length === 0) return <td class="muted">—</td>;
-                      return <td class="on" data-line={v}>{oses.length === OSES.length ? <span class="dot" aria-label="built in" /> : <span class="os-only">{oses.join(', ')} only</span>}</td>;
+                      if (oses.length === 0) return <td class="muted"><span aria-hidden="true">—</span><span class="sr-only">not included</span></td>;
+                      return <td class="on" data-line={v}>{oses.length === OSES.length ? <><span class="dot" aria-hidden="true" /><span class="sr-only">built in</span></> : <span class="os-only">{oses.join(', ')} only</span>}</td>;
                     })}
                   </tr>
                 ))}
@@ -70,17 +70,17 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
     </section>
 
     <section>
-      <h2>Variants</h2>
-      <div class="table-wrap">
-        <table class="grid">
-          <thead><tr><th>Variant</th><th>OS</th>{versionKeys.map((v) => <th><Bullet version={v} size="sm" /></th>)}</tr></thead>
+      <h2 id="variants-h">Variants</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Variants by PHP version">
+        <table class="grid" aria-labelledby="variants-h">
+          <thead><tr><th scope="col">Variant</th><th scope="col">OS</th>{versionKeys.map((v) => <th scope="col"><Bullet version={v} size="sm" /></th>)}</tr></thead>
           <tbody>
             {VARIANTS.flatMap((t) => OSES.map((os, i) => (
               <tr>
                 {i === 0 && <th scope="row" rowspan={OSES.length} class="mono">{t}</th>}
                 <td>{os}</td>
                 {versionKeys.map((v) => built(v, os, t)
-                  ? <td class="on" data-line={v}><span class="dot" aria-label="built" /></td>
+                  ? <td class="on" data-line={v}><span class="dot" aria-hidden="true" /><span class="sr-only">built</span></td>
                   : <td class="off"><span class="struck">not built</span></td>)}
               </tr>
             )))}
@@ -116,20 +116,17 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
 <style>
   section + section { margin-top: 56px; }
   .grid { width: auto; min-width: 100%; }
-  .grid th[scope='row'] { font-weight: 500; font-size: 13px; color: var(--ink); border-bottom: 1px solid var(--rule); padding: 12px 24px 12px 0; text-align: left; white-space: nowrap; }
+  .grid th[scope='row'] { font-weight: 500; font-size: 0.8125rem; color: var(--ink); border-bottom: 1px solid var(--rule); padding: 12px 24px 12px 0; text-align: left; white-space: nowrap; }
   .grid thead th { padding-right: 24px; }
   .grid td { padding-right: 24px; white-space: nowrap; }
-  .on .mono { font-size: 13px; border-bottom: 2px solid var(--line); padding-bottom: 1px; }
+  .on .mono { font-size: 0.8125rem; border-bottom: 2px solid var(--line); padding-bottom: 1px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
-  .off { color: var(--muted); font-size: 13px; }
-  .os-only { font-size: 12px; color: var(--muted); }
+  .off { color: var(--muted); font-size: 0.8125rem; }
+  .os-only { font-size: 0.75rem; color: var(--muted); }
   .notes.lead { margin: 0 0 16px; }
   .struck { text-decoration: line-through; text-decoration-color: var(--muted); }
-  .notes { list-style: none; margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .notes { list-style: none; margin-top: 16px; font-size: 0.8125rem; color: var(--muted); }
   .notes li + li { margin-top: 4px; }
   .notes strong { color: var(--ink); font-weight: 500; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 48px; }
-  .facts > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
-  .facts dt { color: var(--muted); }
-  .facts dd { text-align: right; }
 </style>
