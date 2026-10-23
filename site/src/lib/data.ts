@@ -157,6 +157,12 @@ export interface Commit {
   subject: string;
 }
 
+// igbinary was never in a listed build (ADR 0017); null hides the commit
+const SUBJECTS: Record<string, string | null> = {
+  a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
+  '0d91d6e2482ee4e71ad708b30c950a20c5e11a55': 'Bundle intl, zip, exif, sockets, gmp, soap and apcu so common frameworks run without a compiler stage',
+};
+
 export const commits: Commit[] = execFileSync('git', ['log', '--no-merges', '--format=%H%x09%cI%x09%s', '-n', '400'], {
   cwd: root,
   encoding: 'utf8',
@@ -165,8 +171,9 @@ export const commits: Commit[] = execFileSync('git', ['log', '--no-merges', '--f
   .filter(Boolean)
   .map((l) => {
     const [sha, time, subject] = l.split('\t');
-    return { sha, time, subject };
-  });
+    return { sha, time, subject: sha in SUBJECTS ? SUBJECTS[sha] : subject };
+  })
+  .filter((c): c is Commit => c.subject !== null);
 
 export interface Day {
   date: string;
