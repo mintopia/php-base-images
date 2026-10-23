@@ -47,7 +47,6 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
         <p class="notes">The full module list appears once builds have recorded <code>php -m</code>.</p>
       ) : (
         <>
-          <p class="notes lead">Every module compiled into PHP itself, read from <code>php -m</code> on the current cli images.</p>
           <div class="table-wrap" tabindex="0" role="region" aria-label="Built-in modules by PHP version">
             <table class="grid" aria-labelledby="builtin-h">
               <thead><tr><th scope="col">Module</th>{versionKeys.map((v) => <th scope="col"><Bullet version={v} size="sm" /></th>)}</tr></thead>
@@ -87,7 +86,6 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
           </tbody>
         </table>
       </div>
-      <p class="notes">The <code>nginx</code> image (<code>ghcr.io/mintopia/nginx</code>) is built for alpine and trixie and pairs with <code>php-fpm</code>.</p>
     </section>
 
     <section class="two">
