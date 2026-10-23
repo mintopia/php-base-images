@@ -1,0 +1,18 @@
+---
+import type { Image } from '../lib/data';
+
+interface Props { img: Image; tags: string[] }
+const { img, tags } = Astro.props;
+// full-form tags (name OS and variant) stay visible; defaulted short forms collapse
+const full = (t: string) => ['latest', 'unstable'].includes(t) || (t.split('-').includes(img.os) && t.endsWith(`-${img.variant}`));
+let shown = tags.filter(full);
+if (shown.length === 0 || tags.length - shown.length < 3) shown = tags;
+const hidden = tags.filter((t) => !shown.includes(t));
+---
+{shown.map((t) => <code class="chip">{t}</code>)}
+{hidden.length > 0 && (
+  <details class="more-tags">
+    <summary>+{hidden.length} shorter</summary>
+    <div>{hidden.map((t) => <code class="chip">{t}</code>)}</div>
+  </details>
+)}

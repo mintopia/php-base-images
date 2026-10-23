@@ -11,7 +11,7 @@ const count = (s: string) => cves!.filter((c) => c.severity === s).length;
     <span class="label">CVEs</span>
     {cves.length === 0 ? <span class="muted">None known</span> : <>
       {SEVERITIES.filter((s) => count(s) > 0).map((s) => <span class:list={['sev', s.toLowerCase()]}><b class="mono">{count(s)}</b> {fmtSeverity(s)}</span>)}
-      <a href={`${buildPath(img, build)}cves/`}>All {cves.length} CVEs</a>
+      <a href={`${buildPath(img, build)}cves/`}>View {cves.length === 1 ? 'the CVE' : `all ${cves.length} CVEs`}</a>
     </>}
   </div>
 )}

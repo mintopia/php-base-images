@@ -143,7 +143,7 @@ function diff(prev: BuildRecord | undefined, cur: BuildRecord): Change[] {
     const name = cur.labels['org.opencontainers.image.base.name']?.replace('docker.io/library/', '');
     out.push({ kind: 'base', text: name ? `${name} base image updated` : 'New OS base image' });
   }
-  if (out.length === 0) out.push({ kind: 'rebuild', text: 'Rebuilt, no tracked version changed' });
+  if (out.length === 0) out.push({ kind: 'rebuild', text: 'Rebuilt with the same PHP and extension versions' });
   return out;
 }
 
@@ -282,7 +282,7 @@ export const repoUrl = 'https://github.com/mintopia/php-base-images';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
-export const fmtSeverity = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+export const fmtSeverity = (s: string) => s === 'UNKNOWN' ? 'Unrated' : s.charAt(0) + s.slice(1).toLowerCase();
 export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
 export const packageUrl = (repo: string, id?: string) => `${repoUrl}/pkgs/container/${repo.split('/').pop()}${id ? `/${id}` : ''}`;

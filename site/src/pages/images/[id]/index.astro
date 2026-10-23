@@ -4,6 +4,8 @@ import Bullet from '../../../components/Bullet.astro';
 import Copy from '../../../components/Copy.astro';
 import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
+import Unstable from '../../../components/Unstable.astro';
+import Aliases from '../../../components/Aliases.astro';
 import Examples from '../../../components/Examples.astro';
 import Picker from '../../../components/Picker.astro';
 import Versions from '../../../components/Versions.astro';
@@ -19,6 +21,8 @@ const base = import.meta.env.BASE_URL;
 const ref = `${img.repo}:${img.tag}`;
 const cur = img.current;
 const crit = cur?.cves?.filter((c) => c.severity === 'CRITICAL') ?? [];
+const pinned = cur ? `${ref}@${cur.digest}` : null;
+const aliases = img.tags.filter((t) => t !== img.tag);
 ---
 <Base title={`${img.tag} · mintopia/php`} description={`${ref}: how to use it, what is in it and every recorded build.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
@@ -29,10 +33,13 @@ const crit = cur?.cves?.filter((c) => c.severity === 'CRITICAL') ?? [];
         <h1><small>{img.repo}</small>{img.tag}</h1>
         <Copy text={ref} label="Copy reference" primary />
       </div>
-      <p class="tracks">
-        {img.tags.filter((t) => t !== img.tag).length > 0 && <span class="muted">Also tagged</span>}
-        {img.tags.filter((t) => t !== img.tag).map((t) => <code class="chip">{t}</code>)}
-      </p>
+      {aliases.length > 0 && (
+        <div class="tracks">
+          <span class="muted">Also tagged</span>
+          <Aliases img={img} tags={aliases} />
+        </div>
+      )}
+      <Unstable img={img} />
       {img.parent && (
         <p class="note">Older patch, still rebuilt for OS and extension updates. <a href={imagePath(img.parent)}><code>{img.parent.tag}</code></a> now tracks {img.parent.patch ?? 'a newer release'}.</p>
       )}
@@ -47,15 +54,17 @@ const crit = cur?.cves?.filter((c) => c.severity === 'CRITICAL') ?? [];
         )}
         <h2>Use it</h2>
         <dl class="refs">
-          <div><dt>Image</dt><dd><code>{ref}</code></dd><Copy text={ref} /></div>
+          {pinned
+            ? <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
+            : <div><dt>Image</dt><dd><code>{ref}</code></dd><Copy text={ref} /></div>}
         </dl>
         <Examples img={img} ref={ref} />
         <CveSummary img={img} build={cur} />
-        <h2>Every {img.patch && `${img.patch} `}build <span class="muted count">{img.builds.length}</span></h2>
+        <h2>Builds{img.patch && ` of ${img.patch}`} <span class="muted count">{img.builds.length}</span></h2>
         <Timetable img={img} />
       </div>
       <aside>
-        <h2>On board now</h2>
+        <h2>In the live build</h2>
         <Facts build={cur} />
         <Versions img={img} />
       </aside>

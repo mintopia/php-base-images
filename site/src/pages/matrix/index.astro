@@ -35,7 +35,7 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
         </table>
       </div>
       {dropped.length > 0 && (
-        <ul class="notes">
+        <ul class="notes" id="dropped">
           {dropped.map((d) => <li>† <strong>{d.ext}</strong> on PHP {d.v}: {d.why}.</li>)}
         </ul>
       )}
