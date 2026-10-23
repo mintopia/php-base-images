@@ -43,7 +43,7 @@ tests/smoke.sh php:8.5-alpine-cli cli
 
 ## CI
 
-- A push to `main` builds and publishes every lane.
+- A push to `main` rebuilds and publishes every lane when it changes an image input (Dockerfiles, `docker-bake.hcl`, `versions.json`, `build/`, `rootfs/`, `scripts/tags.sh`); other pushes run the daily upstream check. The site deploys at the end of every build run. To rebuild after a workflow-only change, run `build` with `force`.
 - A daily job rebuilds a lane when one of its upstream inputs has changed or when its OS packages have CVEs with a fix available. It compares the current PHP, OS, nginx, FrankenPHP, s6-overlay and extension versions against the labels on the published images, and Trivy scans the published SBOM for CVEs. Every CI build upgrades OS packages, so a rebuild ships the fix.
 - A monthly job rebuilds everything, as does `workflow_dispatch` with `force`.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
