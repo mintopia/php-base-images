@@ -6,10 +6,12 @@ import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
 import Examples from '../../../components/Examples.astro';
 import Versions from '../../../components/Versions.astro';
-import { SEVERITIES, images, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension, scannedAt, fmtSeverity } from '../../../lib/data';
+import CveTable from '../../../components/CveTable.astro';
+import CveSummary from '../../../components/CveSummary.astro';
+import { pages, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
-  return images.flatMap((img) =>
+  return pages.flatMap((img) =>
     img.builds.map((b, i) => ({
       params: { id: img.id, build: shortDigest(b.digest) },
       props: { img, b, newer: img.builds[i - 1] ?? null, older: img.builds[i + 1] ?? null },
@@ -20,8 +22,7 @@ const { img, b, newer, older } = Astro.props as { img: Image; b: Build; newer: B
 const base = import.meta.env.BASE_URL;
 const pinned = b.live ? `${img.repo}:${img.tag}@${b.digest}` : `${img.repo}@${b.digest}`;
 const run = runUrl(b.run);
-const fixable = b.scan?.fixable ?? [];
-const unfixed = Object.entries(b.scan?.unfixed ?? {}).sort(([x], [y]) => SEVERITIES.indexOf(x) - SEVERITIES.indexOf(y));
+const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
 ---
 <Base title={`${img.tag} · ${fmtTime(b.time)} · mintopia/php`} description={`Build of ${img.repo}:${img.tag} on ${fmtTime(b.time)} UTC, digest ${shortDigest(b.digest)}.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
@@ -44,45 +45,28 @@ const unfixed = Object.entries(b.scan?.unfixed ?? {}).sort(([x], [y]) => SEVERIT
 
     <div class="detail">
       <div>
+        {crit.length > 0 && (
+          <section class="alert">
+            <h2><span class="cve">{crit.length} critical CVE{crit.length === 1 ? '' : 's'}</span> in this build</h2>
+            <CveTable img={img} cves={crit} />
+            <p class="note">
+              {crit.some((c) => c.pkg === 'php') && <>PHP critical CVEs are fixed by a newer PHP release{img.parent && <>; <a href={imagePath(img.parent)}><code>{img.parent.tag}</code></a> tracks it</>}. </>}
+              {crit.some((c) => c.pkg !== 'php' && c.fixed) && (b.live ? 'The next daily check rebuilds this image with the OS package fixes. ' : 'Pull the live tag for a build with the OS package fixes. ')}
+            </p>
+          </section>
+        )}
         <h2>Use it</h2>
         <dl class="refs">
           <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
         </dl>
         <Examples img={img} ref={pinned} />
 
+        <CveSummary img={img} build={b} />
         <h2>What changed</h2>
         <ul class="change-list">
           {b.changes.map((c) => <li>{c.text}</li>)}
           {older && <li class="muted">Compared with <a href={buildPath(img, older)}>{fmtTime(older.time)}</a></li>}
         </ul>
-
-        {scannedAt && b.scan && (
-          <>
-            <h2>Vulnerabilities</h2>
-            {fixable.length === 0 ? <p>No OS package CVEs with a fix available.</p> : (
-              <div class="table-wrap">
-                <table class="cves">
-                  <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th></tr></thead>
-                  <tbody>
-                    {fixable.sort((x, y) => SEVERITIES.indexOf(x.severity) - SEVERITIES.indexOf(y.severity)).map((c) => (
-                      <tr>
-                        <td class="mono">{c.id.startsWith('CVE-') ? <a href={`https://nvd.nist.gov/vuln/detail/${c.id}`}>{c.id}</a> : c.id}</td>
-                        <td>{fmtSeverity(c.severity)}</td>
-                        <td class="mono">{c.pkg}</td>
-                        <td class="mono">{c.fixed}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p class="note">
-              {unfixed.length > 0 && <>Also {unfixed.map(([s, n]) => `${n} ${fmtSeverity(s).toLowerCase()}`).join(', ')} with no fix released yet. </>}
-              {fixable.length > 0 && (b.live ? 'The next daily check rebuilds this image with the fixes. ' : 'Pull the live tag for a build with the fixes. ')}
-              Scanned {fmtTime(scannedAt)} UTC with Trivy against the image's SBOM.
-            </p>
-          </>
-        )}
 
         <h2>Provenance</h2>
         <dl class="refs">
@@ -118,7 +102,7 @@ const unfixed = Object.entries(b.scan?.unfixed ?? {}).sort(([x], [y]) => SEVERIT
           {older ? <a href={buildPath(img, older)}><span class="muted">Older</span>{fmtTime(older.time)}</a> : <span />}
           {newer ? <a href={buildPath(img, newer)}><span class="muted">Newer</span>{fmtTime(newer.time)}</a> : <span />}
         </nav>
-        <Versions img={img} current={b.digest} />
+        <Versions img={img} />
       </aside>
     </div>
 

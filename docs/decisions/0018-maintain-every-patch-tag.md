@@ -18,7 +18,7 @@ Lanes are one per `versions.json` minor and always build its latest php-src tag.
 - Pinning to `X.Y.Z` is safe: the tag keeps receiving fixes for as long as its minor is in `versions.json`. Removing a minor stops all its patches.
 - Daily runs do one more CVE scan per patch target, and full rebuilds grow by four lanes per patch.
 - The cap delays rebuilds once a single minor has roughly 25 maintained patches, about two years of releases. Retire old patches or merge per lane instead of per variant before then.
-- Patch builds are recorded with `version: X.Y.Z`; the site does not list them yet.
+- Patch builds are recorded with `version: X.Y.Z`. The site gives each superseded patch its own page (`/images/X.Y.Z-<os>-<variant>/`); each history ends with a link to the next older patch.
 
 ## Supersedes
 None

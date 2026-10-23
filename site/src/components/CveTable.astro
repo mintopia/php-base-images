@@ -1,0 +1,30 @@
+---
+import { type Image, type Cve, byVersion, chain, imagePath, fmtSeverity } from '../lib/data';
+
+interface Props { img: Image; cves: Cve[] }
+const { img, cves } = Astro.props;
+// the page carrying a PHP fix: that patch's own page, else the minor once it has moved past it
+const fixPage = (fixed: string) => {
+  const top = img.parent ?? img;
+  return chain(top).find((p) => p.patch === fixed) ?? (top.patch && byVersion(top.patch, fixed) >= 0 ? top : null);
+};
+const cveUrl = (c: Cve) => c.url ?? (c.id.startsWith('CVE-') ? `https://nvd.nist.gov/vuln/detail/${c.id}` : null);
+---
+<div class="table-wrap">
+  <table class="cves">
+    <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th></tr></thead>
+    <tbody>
+      {cves.map((c) => {
+        const page = c.pkg === 'php' ? fixPage(c.fixed) : null;
+        return (
+          <tr>
+            <td class="mono">{cveUrl(c) ? <a href={cveUrl(c)}>{c.id}</a> : c.id}</td>
+            <td><span class:list={['sev', c.severity.toLowerCase()]}>{fmtSeverity(c.severity)}</span></td>
+            <td class="mono">{c.pkg}</td>
+            <td class="mono">{page ? <a href={imagePath(page)}>{c.fixed}</a> : c.fixed || <span class="muted">No fix yet</span>}</td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>

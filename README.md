@@ -48,7 +48,7 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - A monthly job rebuilds everything, as does `workflow_dispatch` with `force`.
 - Older patch releases stay maintained: once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily and monthly rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
 - Each PHP version builds and merges in its own call of `.github/workflows/lanes.yml`, so one version publishes without waiting for the others.
-- Every site build scans each recorded build's SBOM with Trivy and flags builds with fixable OS package CVEs.
+- Every site build flags each recorded build's critical CVEs and lists all of them: OS packages from a Trivy scan of its SBOM, PHP from php-src's security advisories.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - Published manifests are signed with cosign keyless signing. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 - Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`; the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. Cleanup of the cache package lives in [php-base-images-cache](https://github.com/mintopia/php-base-images-cache).
@@ -61,7 +61,7 @@ To avoid Docker Hub rate limits, set the optional repo variable `DOCKERHUB_USERN
 
 ## Site
 
-`site/` is an Astro site, rebuilt and deployed to GitHub Pages after every publish. Its data comes from `versions.json`, `scripts/tags.sh`, this README's proxy table and the build records on the `site-data` branch, one JSON file per published manifest. To run it locally:
+`site/` is an Astro site, rebuilt and deployed to GitHub Pages after every publish, with an `llms.txt` index for LLM tools. Its data comes from `versions.json`, `scripts/tags.sh`, this README's proxy table and the build records on the `site-data` branch, one JSON file per published manifest. To run it locally:
 
 ```
 git fetch origin site-data && git worktree add .site-data site-data

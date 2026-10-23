@@ -1,9 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
 import Bullet from '../../components/Bullet.astro';
-import { changelog, images, fmtDate, commitUrl } from '../../lib/data';
+import { changelog, pages, fmtDate, commitUrl } from '../../lib/data';
 
-const byId = new Map(images.map((i) => [i.id, i]));
+const byId = new Map(pages.map((i) => [i.id, i]));
 const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map((i) => (i.variant === 'nginx' ? 'nginx' : i.version)))].sort();
 ---
 <Base title="Changelog · mintopia/php" description="What changed in the images, build by build, alongside the commits behind them." current="changelog">

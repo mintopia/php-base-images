@@ -1,6 +1,6 @@
 ---
 import Bullet from './Bullet.astro';
-import { type Image, fmtTime, shortDigest, commitUrl, buildPath } from '../lib/data';
+import { type Image, fmtTime, shortDigest, commitUrl, buildPath, imagePath, criticals } from '../lib/data';
 
 interface Props { img: Image; current?: string }
 const { img, current } = Astro.props;
@@ -26,9 +26,12 @@ const php = img.variant !== 'nginx';
             </div></td>
             <td class="mono muted wide" title={r.digest}>{shortDigest(r.digest)}</td>
             <td class="mono wide">{r.commit ? <a href={commitUrl(r.commit)}>{r.commit.slice(0, 7)}</a> : <span class="muted">—</span>}</td>
-            <td><div class="changes">{r.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}{r.scan && r.scan.fixable.length > 0 && <span class="cve">{r.scan.fixable.length} fixable CVE{r.scan.fixable.length === 1 ? '' : 's'}</span>}</div></td>
+            <td><div class="changes">{r.live ? <span class="status">Live</span> : <span class="status old">Superseded</span>}{criticals(r) > 0 && <span class="cve">{criticals(r)} critical CVE{criticals(r) === 1 ? '' : 's'}</span>}</div></td>
           </tr>
         ))}
+        {img.previous && (
+          <tr class="prev"><td colspan={php ? 6 : 5}><a class="chip php" href={imagePath(img.previous)} title={`Builds of ${img.previous.patch}`}>↓ {img.previous.patch}</a></td></tr>
+        )}
       </tbody>
     </table>
   </div>

@@ -50,16 +50,12 @@ export interface Cve {
   severity: string;
   pkg: string;
   fixed: string;
-}
-
-export interface Scan {
-  fixable: Cve[];
-  unfixed: Record<string, number>;
+  url?: string;
 }
 
 export interface Build extends BuildRecord {
   changes: Change[];
-  scan: Scan | null;
+  cves: Cve[] | null;
   live: boolean;
   until: string | null;
 }
@@ -72,6 +68,9 @@ export interface Image {
   variant: Variant;
   stable: boolean;
   tag: string;
+  patch: string | null;
+  parent: Image | null;
+  previous: Image | null;
   tags: string[];
   current: Build | null;
   builds: Build[];
@@ -81,7 +80,7 @@ export const versions: Record<string, VersionEntry> = JSON.parse(
   readFileSync(resolve(root, 'versions.json'), 'utf8'),
 ).variable.VERSIONS.default;
 
-const byVersion = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+export const byVersion = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 export const versionKeys = Object.keys(versions).sort(byVersion);
 export const latestStable = versionKeys.filter((k) => versions[k].stable).at(-1)!;
 
@@ -97,10 +96,23 @@ const records: BuildRecord[] = [
 
 // written by scripts/scan-cves.sh on each site build; absent when the scan failed
 const cvesFile = process.env.SITE_CVES ?? resolve(root, '.site-data/cves.json');
-const scans: { scanned?: string; builds: Record<string, Scan> } = existsSync(cvesFile)
-  ? JSON.parse(readFileSync(cvesFile, 'utf8'))
-  : { builds: {} };
+const scans: { scanned?: string; php?: { id: string; url: string; severity: string; fixed: string[] }[]; builds: Record<string, Cve[]> } =
+  existsSync(cvesFile) ? JSON.parse(readFileSync(cvesFile, 'utf8')) : { builds: {} };
 export const scannedAt = scans.scanned ?? null;
+
+export const criticals = (b: { cves: Cve[] | null }) => b.cves?.filter((c) => c.severity === 'CRITICAL').length ?? 0;
+export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
+
+// php-src advisories name a fixed X.Y.Z per minor; earlier patches of that minor are affected
+function cves(r: BuildRecord): Cve[] | null {
+  if (!scannedAt) return null;
+  const minor = r.php.split('.').slice(0, 2).join('.');
+  const php = r.variant === 'nginx' ? [] : (scans.php ?? []).flatMap((a) => {
+    const fixed = a.fixed.find((f) => f.startsWith(`${minor}.`));
+    return fixed && byVersion(r.php, fixed) < 0 ? [{ id: a.id, url: a.url, severity: a.severity, pkg: 'php', fixed }] : [];
+  });
+  return [...new Map([...php, ...(scans.builds[r.digest] ?? [])].map((c) => [c.id, c])).values()].sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
+}
 
 const COMPONENT = /^net\.mintopia\.(?:ext\.)?([a-z0-9]+)\.version$/;
 const BASE = 'org.opencontainers.image.base.digest';
@@ -144,22 +156,49 @@ function fallbackTags(version: string, os: string, variant: Variant) {
   return [...new Set(out.split('\n').filter(Boolean))];
 }
 
-function image(version: string, os: string, variant: Variant): Image {
-  const mine = records
-    .filter((r) => r.os === os && r.variant === variant && (variant === 'nginx' || r.version === version))
-    .sort((a, b) => a.time.localeCompare(b.time));
-  // rebuilds that changed nothing tracked are hidden unless the tags still point at them
-  const kept = mine
-    .map((r, i) => ({ r, changes: diff(mine[i - 1], r) }))
-    .filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
-  const builds: Build[] = kept
-    .map(({ r, changes }, i) => ({ ...r, changes, scan: scans.builds[r.digest] ?? null, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
+// rebuilds that changed nothing tracked are hidden unless the tags still point at them
+function history(mine: { r: BuildRecord; changes: Change[] }[]): Build[] {
+  const kept = mine.filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
+  return kept
+    .map(({ r, changes }, i) => ({ ...r, changes, cves: cves(r), live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
     .reverse();
+}
+
+const PATCH = /^\d+\.\d+\.\d+$/;
+
+// the minor's page holds the current patch; each older X.Y.Z gets its own page, chained via previous
+function image(version: string, os: string, variant: Variant): Image {
+  const nginx = variant === 'nginx';
+  const all = records
+    .filter((r) => r.os === os && r.variant === variant && (nginx || r.version === version || r.version.startsWith(`${version}.`)))
+    .sort((a, b) => a.time.localeCompare(b.time));
+  // patch lanes interleave, so a build compares with its own patch, else the minor's previous build
+  const diffed = all.map((r, i) => {
+    const before = all.slice(0, i);
+    const prev = before.findLast((p) => p.php === r.php && PATCH.test(r.php)) ?? before.findLast((p) => p.version === r.version);
+    return { r, changes: diff(prev, r) };
+  });
+  const lane = all.filter((r) => r.version === version);
+  const live = nginx ? '' : lane.at(-1)?.php ?? '';
+  const older = (r: BuildRecord) => !nginx && PATCH.test(r.php) && r.php !== live;
+  const builds = history(diffed.filter(({ r }) => !older(r)));
   const current = builds[0] ?? null;
-  const tags = current?.tags ?? fallbackTags(version, os, variant);
-  const repo = variant === 'nginx' ? 'ghcr.io/mintopia/nginx' : 'ghcr.io/mintopia/php';
-  const tag = variant === 'nginx' ? os : `${version}-${os}-${variant}`;
-  return { id: variant === 'nginx' ? `nginx-${os}` : tag, repo, version, os, variant, stable: versions[version]?.stable ?? true, tag, tags, current, builds };
+  const repo = nginx ? 'ghcr.io/mintopia/nginx' : 'ghcr.io/mintopia/php';
+  const tag = nginx ? os : `${version}-${os}-${variant}`;
+  const stable = versions[version]?.stable ?? true;
+  const img: Image = {
+    id: nginx ? `nginx-${os}` : tag, repo, version, os, variant, stable, tag, patch: PATCH.test(live) ? live : null, parent: null, previous: null,
+    tags: current?.tags ?? fallbackTags(version, os, variant), current, builds,
+  };
+  let prev = img;
+  for (const php of [...new Set(diffed.filter(({ r }) => older(r)).map(({ r }) => r.php))].sort(byVersion).reverse()) {
+    const b = history(diffed.filter(({ r }) => r.php === php));
+    const ptag = `${php}-${os}-${variant}`;
+    // a build of the then-current patch also carried minor tags that have since moved
+    const tags = b[0].tags.filter((t) => t === php || t.startsWith(`${php}-`));
+    prev = prev.previous = { ...img, id: ptag, tag: ptag, patch: php, parent: img, previous: null, tags, current: b[0], builds: b };
+  }
+  return img;
 }
 
 export const images: Image[] = [
@@ -170,6 +209,14 @@ export const images: Image[] = [
   ),
   ...OSES.map((os) => image(latestStable, os, 'nginx')),
 ];
+
+export const chain = (img: Image) => {
+  const out: Image[] = [];
+  for (let i: Image | null = img; i; i = i.previous) out.push(i);
+  return out;
+};
+// every image page: the minor images plus their older patches
+export const pages = images.flatMap(chain);
 
 export interface Commit {
   sha: string;
@@ -206,7 +253,7 @@ export interface Day {
 export const changelog: Day[] = (() => {
   const days = new Map<string, Day>();
   const day = (date: string) => days.get(date) ?? days.set(date, { date, changes: [], commits: [] }).get(date)!;
-  for (const img of images) {
+  for (const img of pages) {
     for (const b of img.builds) {
       const d = day(b.time.slice(0, 10));
       for (const c of b.changes) {
@@ -235,7 +282,6 @@ export const repoUrl = 'https://github.com/mintopia/php-base-images';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
-export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
 export const fmtSeverity = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
