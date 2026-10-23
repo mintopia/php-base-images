@@ -1,0 +1,15 @@
+---
+import { type Build, components, fmtTime, fmtSize, ARCHES } from '../lib/data';
+
+interface Props { build: Build | null }
+const { build } = Astro.props;
+const base = build?.labels['org.opencontainers.image.base.name'];
+---
+<dl class="facts">
+  {build?.php && <div><dt>PHP</dt><dd>{build.php}{build.labels['net.mintopia.php.source'] === 'php-src' && <span class="muted"> · php-src</span>}</dd></div>}
+  {build && components(build.labels).map(([name, v]) => <div><dt>{name}</dt><dd>{v}</dd></div>)}
+  {base && <div><dt>Base</dt><dd>{base.replace('docker.io/library/', '')}</dd></div>}
+  <div><dt>Platforms</dt><dd>{ARCHES.join(' · ')}</dd></div>
+  {build?.sizes && <div><dt>Size</dt><dd>{ARCHES.filter((a) => build.sizes![a]).map((a) => `${a} ${fmtSize(build.sizes![a])}`).join(' · ')}</dd></div>}
+  {build && <div><dt>Built</dt><dd>{fmtTime(build.time)}</dd></div>}
+</dl>

@@ -1,0 +1,18 @@
+---
+import Base from '../../layouts/Base.astro';
+import Picker from '../../components/Picker.astro';
+import { latestStable } from '../../lib/data';
+---
+<Base title="Images · mintopia/php" description="Pick a PHP version, OS and variant, or the nginx image, to see how to use it and every build." current="images">
+  <Picker />
+  <div class="page">
+    <header class="page-head">
+      <h1>Choose an image</h1>
+      <p>
+        Pick <code>php</code> or <code>nginx</code>, then a PHP version, OS and variant. Tags read <code>&lt;version&gt;-&lt;os&gt;-&lt;variant&gt;</code>;
+        a part left out defaults to {latestStable}, <code>alpine</code> and <code>cli</code>, so <code>latest</code> is {latestStable} alpine cli.
+        Every image is built for amd64 and arm64.
+      </p>
+    </header>
+  </div>
+</Base>

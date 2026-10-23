@@ -1,0 +1,337 @@
+---
+import Base from '../../layouts/Base.astro';
+import Code from '../../components/Code.astro';
+import { latestStable, readmeTable } from '../../lib/data';
+
+const v = latestStable;
+const php = 'ghcr.io/mintopia/php';
+const proxyRanges = await readmeTable('| In front of the container |');
+
+const one = `services:
+  app:
+    image: ${php}:${v}-php-fpm-nginx
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./:/app"
+    environment:
+      PUID: 1000`;
+const two = `services:
+  web:
+    image: ghcr.io/mintopia/nginx:alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./public:/app/public:ro"
+    environment:
+      PHP_FPM_HOST: php
+  php:
+    image: ${php}:${v}-php-fpm
+    volumes: ["./:/app"]`;
+const franken = `services:
+  app:
+    image: ${php}:${v}-frankenphp
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./:/app"
+    environment:
+      FRANKENPHP_CONFIG: worker ./public/index.php`;
+const proxied = `services:
+  app:
+    image: ${php}:${v}-php-fpm-nginx
+    environment:
+      # the Docker network the proxy reaches the container from
+      TRUSTED_PROXIES: 172.16.0.0/12`;
+const cli = `docker run --rm -v "$PWD:/app" ${php}:${v} php artisan migrate --force`;
+const worker = `services:
+  queue:
+    image: ${php}:${v}
+    volumes:
+      - "./:/app"
+    command: php artisan queue:work`;
+const hardened = `services:
+  app:
+    image: ${php}:${v}-php-fpm-nginx
+    read_only: true
+    tmpfs:
+      - "/run:exec"
+      - "/tmp"
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    environment:
+      PUID: 1000`;
+const extend = `FROM ${php}:${v}-php-fpm
+RUN install-php-extensions intl
+COPY --chmod=755 migrate.sh /docker-entrypoint.d/50-migrate`;
+const composerBuild = `FROM ${php}:${v}-cli AS vendor
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+COPY . .
+RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
+
+FROM ${php}:${v}-php-fpm
+COPY --from=vendor /app /app`;
+const pieAlpine = `FROM ${php}:${v}-php-fpm
+RUN apk add --no-cache --virtual .pie-deps $PHPIZE_DEPS \\
+    && pie install apcu/apcu \\
+    && apk del .pie-deps`;
+const pieTrixie = `FROM ${php}:${v}-trixie-php-fpm
+RUN apt-get update \\
+    && apt-get install -y --no-install-recommends $PHPIZE_DEPS unzip \\
+    && pie install apcu/apcu \\
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS unzip \\
+    && rm -rf /var/lib/apt/lists/*`;
+const status = `environment:
+  PHP_FPM_STATUS_PATH: /fpm-status
+  PHP_FPM_PING_PATH: /fpm-ping
+  NGINX_STATUS_PATH: /nginx-status
+  PHP_FPM_STATUS_ALLOW: "127.0.0.1 ::1 10.0.0.0/8"`;
+
+const toc = [
+  ['run', 'Run', [
+    ['one-container', 'One container'],
+    ['two-containers', 'nginx and php-fpm, separately'],
+    ['frankenphp-setup', 'FrankenPHP'],
+    ['cli-setup', 'Commands and workers'],
+  ]],
+  ['configure', 'Configure', [
+    ['proxies', 'Behind a proxy'],
+    ['hardened', 'Non-root, read-only'],
+    ['status', 'Status pages'],
+  ]],
+  ['extend', 'Extend', [
+    ['extending', 'Extensions and start-up hooks'],
+    ['composer', 'Composer'],
+    ['pie', 'PIE extensions'],
+  ]],
+] as const;
+---
+<Base title="Usage · mintopia/php" description="How to run, configure and extend the images, with compose files and Dockerfiles." current="usage">
+  <div class="page usage lined" data-line={v}>
+    <header class="page-head">
+      <h1>Usage</h1>
+      <p>Run, configure and extend the images, with a compose file or Dockerfile for each.</p>
+    </header>
+
+    <div class="docs">
+      <nav class="toc" aria-label="On this page">
+        {toc.map(([id, label, items]) => (
+          <div>
+            <a class="toc-head" href={`#${id}`}>{label}</a>
+            {items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+          </div>
+        ))}
+      </nav>
+
+      <div class="docs-body prose">
+        <h2 id="run">Run</h2>
+        <p>Pick the Variant that matches how your app takes requests.</p>
+        <div class="table-wrap">
+          <table class="shapes">
+            <thead><tr><th>You need</th><th>Variant</th></tr></thead>
+            <tbody>
+              <tr><td><a href="#one-container">One container serving a PHP app over HTTP</a></td><td><code>php-fpm-nginx</code> or <code>frankenphp</code></td></tr>
+              <tr><td><a href="#two-containers">Web server and PHP scaled separately</a></td><td><code>nginx</code> + <code>php-fpm</code></td></tr>
+              <tr><td><a href="#frankenphp-setup">Long-running workers, HTTPS from Caddy, early hints</a></td><td><code>frankenphp</code></td></tr>
+              <tr><td><a href="#cli-setup">Queues, cron, migrations, tests</a></td><td><code>cli</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <section id="one-container">
+          <h3>One container</h3>
+          <p>nginx and php-fpm run side by side under s6-overlay. nginx serves static files from <code>APP_PUBLIC_PATH</code> and passes PHP requests to php-fpm on the loopback.</p>
+          <figure class="route" aria-label="Browser to nginx on port 8080, then FastCGI to php-fpm inside one container">
+            <div class="stop ext">Browser</div>
+            <div class="hop"><span>HTTP</span></div>
+            <div class="ctr">
+              <span class="ctr-tag">php:{v}-php-fpm-nginx</span>
+              <div class="ctr-row">
+                <div class="stop">nginx<small>:8080</small></div>
+                <div class="hop"><span>FastCGI 127.0.0.1:9000</span></div>
+                <div class="stop php">php-fpm<small>/app</small></div>
+              </div>
+            </div>
+          </figure>
+          <Code lang="compose.yaml" code={one} />
+        </section>
+
+        <section id="two-containers">
+          <h3>nginx and php-fpm, separately</h3>
+          <p>The <code>nginx</code> image finds php-fpm by name through <code>PHP_FPM_HOST</code>, resolving it again every 10 seconds so php-fpm can restart or scale. nginx needs only the public files; php-fpm needs the whole app.</p>
+          <figure class="route" aria-label="Browser to nginx container, then FastCGI to a separate php-fpm container">
+            <div class="stop ext">Browser</div>
+            <div class="hop"><span>HTTP</span></div>
+            <div class="ctr">
+              <span class="ctr-tag">nginx:alpine</span>
+              <div class="ctr-row"><div class="stop">nginx<small>:8080</small></div></div>
+            </div>
+            <div class="hop"><span>FastCGI php:9000</span></div>
+            <div class="ctr">
+              <span class="ctr-tag">php:{v}-php-fpm</span>
+              <div class="ctr-row"><div class="stop php">php-fpm<small>:9000</small></div></div>
+            </div>
+          </figure>
+          <Code lang="compose.yaml" code={two} />
+        </section>
+
+        <section id="frankenphp-setup">
+          <h3>FrankenPHP</h3>
+          <p>Caddy and PHP in one process. Worker mode keeps the app booted between requests. Set <code>SERVER_NAME</code> to a hostname and Caddy fetches certificates itself.</p>
+          <figure class="route" aria-label="Browser to FrankenPHP, which runs Caddy and PHP in one process">
+            <div class="stop ext">Browser</div>
+            <div class="hop"><span>HTTP or HTTPS</span></div>
+            <div class="ctr">
+              <span class="ctr-tag">php:{v}-frankenphp</span>
+              <div class="ctr-row"><div class="stop php">Caddy + PHP worker<small>:8080</small></div></div>
+            </div>
+          </figure>
+          <Code lang="compose.yaml" code={franken} />
+        </section>
+
+        <section id="cli-setup">
+          <h3>Commands and workers</h3>
+          <p>The <code>cli</code> image runs whatever command you give it: one-off tasks, or queue workers and schedulers alongside a web container.</p>
+          <Code lang="shell" code={cli} />
+          <Code lang="compose.yaml" code={worker} />
+        </section>
+
+        <h2 id="configure">Configure</h2>
+        <p>Settings are environment variables read when the container starts. These are the ones most setups change; the <a href="https://github.com/mintopia/php-base-images#configuration">README</a> lists every one.</p>
+
+        <section id="proxies">
+          <h3>Behind a proxy</h3>
+          <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Your framework can trust every proxy safely. Switch the setting to see what PHP receives.</p>
+          <div class="demo">
+            <div class="seg" role="radiogroup" aria-label="TRUSTED_PROXIES">
+              <label><input type="radio" name="trust" value="yes" checked />Trusted: <code>172.16.0.0/12</code></label>
+              <label><input type="radio" name="trust" value="no" />Unset</label>
+            </div>
+            <figure class="route" aria-label="Browser to a proxy at 172.18.0.2, which forwards to the container">
+              <div class="stop ext">Browser<small>203.0.113.7</small></div>
+              <div class="hop"><span>HTTPS</span></div>
+              <div class="stop ext">Proxy<small>172.18.0.2</small></div>
+              <div class="hop"><span>HTTP, X-Forwarded-*</span></div>
+              <div class="ctr">
+                <span class="ctr-tag">php:{v}-php-fpm-nginx</span>
+                <div class="ctr-row">
+                  <div class="stop"><span class="yes">trusts 172.18.0.2</span><span class="no">trusts nothing</span><small>nginx</small></div>
+                  <div class="hop"><span>FastCGI</span></div>
+                  <div class="stop php">PHP</div>
+                </div>
+              </div>
+            </figure>
+            <div class="table-wrap">
+              <table class="server">
+                <thead><tr><th>$_SERVER</th><th>PHP sees</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">REMOTE_ADDR</td><td class="mono"><span class="yes">203.0.113.7</span><span class="no">172.18.0.2</span></td></tr>
+                  <tr><td class="mono">HTTPS</td><td class="mono"><span class="yes">on</span><span class="no">(empty)</span></td></tr>
+                  <tr><td class="mono">REQUEST_SCHEME</td><td class="mono"><span class="yes">https</span><span class="no">http</span></td></tr>
+                  <tr><td class="mono">HTTP_X_FORWARDED_FOR</td><td class="mono"><span class="yes">203.0.113.7</span><span class="no">172.18.0.2</span></td></tr>
+                  <tr><td class="mono">HTTP_X_FORWARDED_HOST</td><td class="mono"><span class="yes">passed through</span><span class="no">(empty)</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <Code lang="compose.yaml" code={proxied} />
+          <h4>What to trust</h4>
+          <div class="ranges"><Fragment set:html={proxyRanges} /></div>
+          <p class="muted">With several proxies in a chain, list every hop's range. Never trust <code>0.0.0.0/0</code> in production.</p>
+        </section>
+
+        <section id="hardened">
+          <h3>Non-root, read-only</h3>
+          <p>Every image runs with a read-only root filesystem and no capabilities, given a tmpfs where the variant writes. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
+          <Code lang="compose.yaml" code={hardened} />
+        </section>
+
+        <section id="status">
+          <h3>Status pages</h3>
+          <p>Off by default. Setting a path turns that page on, reachable only from addresses in <code>PHP_FPM_STATUS_ALLOW</code>.</p>
+          <Code lang="compose.yaml" code={status} />
+        </section>
+
+        <h2 id="extend">Extend</h2>
+        <p>Build your own image on top: add extensions, start-up hooks and Composer dependencies in a Dockerfile.</p>
+
+        <section id="extending">
+          <h3>Extensions and start-up hooks</h3>
+          <p><code>install-php-extensions</code> and <code>pie</code> are in every image. Executables in <code>/docker-entrypoint.d/</code> run in filename order at start, as root, before the command.</p>
+          <Code lang="Dockerfile" code={extend} />
+        </section>
+
+        <section id="composer">
+          <h3>Composer</h3>
+          <p>Composer isn't in the images. Run it in a build stage on the <code>cli</code> image: it has the same PHP and extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones. Only the app and its <code>vendor/</code> reach the final stage.</p>
+          <Code lang="Dockerfile" code={composerBuild} />
+          <p class="muted">On trixie, also install <code>unzip</code> in the build stage; Composer needs it to unpack packages.</p>
+        </section>
+
+        <section id="pie">
+          <h3>PIE extensions</h3>
+          <p><code>pie</code> installs and enables extensions published on Packagist. The images carry no compiler, so add <code>$PHPIZE_DEPS</code> and remove it in the same <code>RUN</code> to keep the layer small.</p>
+          <div class="os-switch">
+            <div class="seg small" role="radiogroup" aria-label="OS">
+              <label><input type="radio" name="pie-os" value="alpine" checked />alpine</label>
+              <label><input type="radio" name="pie-os" value="trixie" />trixie</label>
+            </div>
+            <div class="alpine"><Code lang="Dockerfile" code={pieAlpine} /></div>
+            <div class="trixie"><Code lang="Dockerfile" code={pieTrixie} /></div>
+          </div>
+          <p class="muted">On PHP 8.6, PIE is the only way to add PECL extensions. For extensions not on Packagist, <code>install-php-extensions</code> handles its own build dependencies, as in <a href="#extending">Extensions and start-up hooks</a>.</p>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .usage .prose section { margin-top: 56px; }
+  .usage .prose h2 + p + section, .usage .prose h2 + p + .table-wrap { margin-top: 28px; }
+  .usage .prose section > h3 { margin-top: 0; }
+  .shapes td a { color: var(--ink); text-decoration-color: var(--control); text-underline-offset: 3px; }
+  .shapes td a:hover { text-decoration-color: var(--accent); }
+  .ranges :global(td code) { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
+
+  .route { display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; margin: 24px 0 16px; padding: 40px 24px 28px; background: var(--board); border-radius: 12px; overflow-x: auto; }
+  .stop { flex: none; display: grid; align-content: center; gap: 2px; min-width: 104px; min-height: 64px; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--raise); font-weight: 700; font-size: 14px; text-align: center; }
+  .stop small { font: 500 12px var(--mono); color: var(--muted); }
+  .stop.ext { border-style: dashed; border-color: var(--muted); font-weight: 500; }
+  .stop.php { border-color: var(--line); }
+  .hop { flex: 1 1 64px; max-width: 180px; position: relative; height: 3px; background: var(--line); margin: 0 4px; }
+  .hop::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--line); border-right: 0; }
+  .hop span { display: block; position: relative; top: -20px; height: 0; padding: 0 14px; text-align: center; font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+  .ctr { position: relative; display: flex; padding: 20px 16px 16px; border: 1px solid var(--control); border-radius: 14px; background: var(--bg); flex: none; }
+  .ctr-tag { position: absolute; top: -10px; left: 12px; font: 500 11px var(--mono); padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--bg); white-space: nowrap; }
+  .ctr-row { display: flex; align-items: center; }
+  .ctr-row .hop { min-width: 120px; }
+
+  .demo { margin: 24px 0; }
+  .demo .seg code { font-size: 12px; margin-left: 6px; background: none; padding: 0; }
+  .demo .seg label { display: flex; white-space: nowrap; }
+  .demo:has(input[value='yes']:checked) .no, .demo:has(input[value='no']:checked) .yes { display: none; }
+  .demo .server td:last-child span { font-weight: 700; color: var(--accent-text); }
+  .server { max-width: 560px; }
+
+  .os-switch { margin-top: 20px; }
+  .os-switch:has(input[value='alpine']:checked) .trixie, .os-switch:has(input[value='trixie']:checked) .alpine { display: none; }
+  .os-switch .seg label { font-family: var(--mono); }
+
+  @media (max-width: 640px) {
+    .route { flex-direction: column; align-items: stretch; padding: 24px 16px; }
+    .ctr-row { flex-direction: column; align-items: stretch; }
+    .ctr { flex-direction: column; padding-top: 24px; }
+    .ctr-tag { right: 12px; justify-self: start; width: fit-content; max-width: calc(100% - 24px); white-space: normal; overflow-wrap: anywhere; }
+    .hop, .ctr-row .hop { flex: none; width: 3px; min-width: 0; max-width: none; height: 40px; margin: 4px auto 16px; }
+    .hop::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--line); border-bottom: 0; }
+    .hop span { position: absolute; height: auto; padding: 0; top: 50%; left: 14px; transform: translateY(-50%); }
+  }
+</style>

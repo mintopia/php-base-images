@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T18:08:32.829933+00:00",
+  "title": "Design System: mintopia/php",
+  "extensions": {
+    "colorMeta": {
+      "line-82-violet": {
+        "role": "primary",
+        "displayName": "8.2 Violet",
+        "canonical": "oklch(52% 0.18 290)",
+        "tonalRamp": [
+          "oklch(15% 0.18 290)",
+          "oklch(27% 0.18 290)",
+          "oklch(39% 0.18 290)",
+          "oklch(51% 0.18 290)",
+          "oklch(63% 0.18 290)",
+          "oklch(75% 0.18 290)",
+          "oklch(85% 0.18 290)",
+          "oklch(95% 0.18 290)"
+        ]
+      },
+      "line-83-teal": {
+        "role": "primary",
+        "displayName": "8.3 Teal",
+        "canonical": "oklch(52% 0.09 183)",
+        "tonalRamp": [
+          "oklch(15% 0.09 183)",
+          "oklch(27% 0.09 183)",
+          "oklch(39% 0.09 183)",
+          "oklch(51% 0.09 183)",
+          "oklch(63% 0.09 183)",
+          "oklch(75% 0.09 183)",
+          "oklch(85% 0.09 183)",
+          "oklch(95% 0.09 183)"
+        ]
+      },
+      "line-84-orange": {
+        "role": "primary",
+        "displayName": "8.4 Orange",
+        "canonical": "oklch(58% 0.15 50)",
+        "tonalRamp": [
+          "oklch(15% 0.15 50)",
+          "oklch(27% 0.15 50)",
+          "oklch(39% 0.15 50)",
+          "oklch(51% 0.15 50)",
+          "oklch(63% 0.15 50)",
+          "oklch(75% 0.15 50)",
+          "oklch(85% 0.15 50)",
+          "oklch(95% 0.15 50)"
+        ]
+      },
+      "line-85-blue": {
+        "role": "primary",
+        "displayName": "8.5 Blue",
+        "canonical": "oklch(51% 0.17 256)",
+        "tonalRamp": [
+          "oklch(15% 0.17 256)",
+          "oklch(27% 0.17 256)",
+          "oklch(39% 0.17 256)",
+          "oklch(51% 0.17 256)",
+          "oklch(63% 0.17 256)",
+          "oklch(75% 0.17 256)",
+          "oklch(85% 0.17 256)",
+          "oklch(95% 0.17 256)"
+        ]
+      },
+      "line-86-amber": {
+        "role": "primary",
+        "displayName": "8.6 RC Amber",
+        "canonical": "oklch(79% 0.16 85)",
+        "tonalRamp": [
+          "oklch(15% 0.16 85)",
+          "oklch(27% 0.16 85)",
+          "oklch(39% 0.16 85)",
+          "oklch(51% 0.16 85)",
+          "oklch(63% 0.16 85)",
+          "oklch(75% 0.16 85)",
+          "oklch(85% 0.16 85)",
+          "oklch(95% 0.16 85)"
+        ]
+      },
+      "live-green": {
+        "role": "secondary",
+        "displayName": "Live Green (dark)",
+        "canonical": "#2fbf6a",
+        "tonalRamp": [
+          "oklch(15% 0.14 150)",
+          "oklch(27% 0.14 150)",
+          "oklch(39% 0.14 150)",
+          "oklch(51% 0.14 150)",
+          "oklch(63% 0.14 150)",
+          "oklch(75% 0.14 150)",
+          "oklch(85% 0.14 150)",
+          "oklch(95% 0.14 150)"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "board": {
+        "role": "neutral",
+        "displayName": "Board (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "raise": {
+        "role": "neutral",
+        "displayName": "Raise (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Control (dark)",
+        "tonalRamp": [
+          "#0f1113",
+          "#17191c",
+          "#2a2d31",
+          "#5f6268",
+          "#a0a3a9",
+          "#c4c6ca",
+          "#e3e4e6",
+          "#f3f3f1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Destination",
+        "purpose": "Image tag on image pages and the home hero reference, mono, read large."
+      },
+      "headline": {
+        "displayName": "Page title",
+        "purpose": "h1 on Images, Matrix, Changelog."
+      },
+      "title": {
+        "displayName": "Section heading",
+        "purpose": "Uppercase h2 section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default UI text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table headers, fieldset legends."
+      },
+      "mono": {
+        "displayName": "Machine strings",
+        "purpose": "Tags, digests, versions, timestamps, commits only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pick-ring",
+        "value": "0 0 0 2px var(--board), 0 0 0 4px var(--ink)",
+        "purpose": "Current line bullet in the picker (accent instead of ink on focus)."
+      },
+      {
+        "name": "live-row-bar",
+        "value": "inset 3px 0 var(--accent)",
+        "purpose": "Marks the live build row in the timetable."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "0.15s",
+        "purpose": "Opacity/background/border transitions on bullets and buttons."
+      },
+      {
+        "name": "copied",
+        "value": "1400ms",
+        "purpose": "Duration the Copy button reads 'Copied'."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack-refs",
+        "value": "560px"
+      },
+      {
+        "name": "header-wrap",
+        "value": "720px"
+      },
+      {
+        "name": "single-column",
+        "value": "960px"
+      }
+    ],
+    "theme": {
+      "mode": "dark-only",
+      "note": "No light theme and no switcher, by the user's choice.",
+      "lineColours": "unchanged across themes"
+    }
+  },
+  "components": [
+    {
+      "name": "Line Bullet",
+      "kind": "custom",
+      "refersTo": "line-bullet",
+      "description": "PHP version as a transit-route bullet; colour comes from data-line.",
+      "html": "<span class=\"ds-bullet\" style=\"--line:var(--l82,#6e4bc8)\">8.2</span> <span class=\"ds-bullet\" style=\"--line:var(--l85,#0a64c8)\">8.5</span> <span class=\"ds-bullet ds-rc\" style=\"--line:var(--l86,#e8b100)\">8.6</span> <span class=\"ds-bullet ds-lg\" style=\"--line:var(--l85,#0a64c8)\">8.5</span>",
+      "css": ".ds-bullet{display:inline-grid;place-items:center;min-width:44px;height:26px;padding:0 8px;border-radius:5px;background:var(--line);color:#fff;font:700 13px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:-0.01em;vertical-align:middle}.ds-rc{color:#141518;outline:1.5px dashed #141518;outline-offset:-4px}.ds-lg{min-width:72px;height:72px;border-radius:10px;font-size:24px}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "input",
+      "refersTo": "segmented-option",
+      "description": "Image / OS / variant picker; current option fills ink.",
+      "html": "<div class=\"ds-seg\"><a aria-current=\"page\" href=\"#\">alpine</a><a href=\"#\">trixie</a></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid var(--control,#c4c6ca);border-radius:6px;overflow:hidden;background:var(--raise,#fff)}.ds-seg label{position:relative;display:grid;place-items:center;min-height:38px;padding:0 14px;font:500 14px 'Hanken Grotesk',system-ui,sans-serif;color:var(--muted,#5f6268);border-left:1px solid var(--control,#c4c6ca);cursor:pointer}.ds-seg label:first-child{border-left:0}.ds-seg input{position:absolute;opacity:0}.ds-seg label:hover{color:var(--ink,#141518)}.ds-seg label:has(input:checked){background:var(--ink,#141518);color:var(--bg,#fff)}.ds-seg label:has(input:focus-visible){outline:2px solid var(--accent,#0a64c8);outline-offset:-4px}"
+    },
+    {
+      "name": "Copy Button (primary)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Copy reference; fill follows the selected line accent.",
+      "html": "<button class=\"ds-btn ds-primary\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"5.5\" y=\"5.5\" width=\"8\" height=\"8\" rx=\"1.5\"/><path d=\"M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5\"/></svg>Copy reference</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border:1px solid var(--control,#c4c6ca);border-radius:6px;background:var(--raise,#fff);color:var(--ink,#141518);font:500 14px 'Hanken Grotesk',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.ds-btn svg{width:16px;height:16px}.ds-btn:hover{border-color:var(--ink,#141518)}.ds-btn:focus-visible{outline:2px solid var(--accent,#0a64c8);outline-offset:2px}.ds-primary{height:44px;background:var(--accent,#0a64c8);border-color:var(--accent,#0a64c8);color:#fff}.ds-primary:hover{filter:brightness(1.08);border-color:var(--accent,#0a64c8)}"
+    },
+    {
+      "name": "Copy Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Secondary copy button for reference rows.",
+      "html": "<button class=\"ds-btn2\">Copy</button>",
+      "css": ".ds-btn2{height:32px;padding:0 10px;border:1px solid var(--control,#c4c6ca);border-radius:6px;background:var(--raise,#fff);color:var(--ink,#141518);font:500 13px 'Hanken Grotesk',system-ui,sans-serif;cursor:pointer}.ds-btn2:hover{border-color:var(--ink,#141518)}.ds-btn2:focus-visible{outline:2px solid var(--accent,#0a64c8);outline-offset:2px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Alias tags and component version changes; php chip takes the line border.",
+      "html": "<code class=\"ds-chip\">8.5-alpine</code> <code class=\"ds-chip\">latest</code> <code class=\"ds-chip ds-php\" style=\"--line:#0a64c8\">php 8.5.1</code>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:6px;font:500 12px 'JetBrains Mono',ui-monospace,monospace;padding:2px 8px;border:1px solid var(--rule,#e3e4e6);border-radius:4px;background:var(--raise,#fff);color:var(--ink,#141518)}.ds-php{border-color:var(--line)}"
+    },
+    {
+      "name": "Status Dot",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "Live (filled green) vs superseded (hollow muted).",
+      "html": "<span class=\"ds-status\">Live</span> <span class=\"ds-status ds-old\">Superseded</span>",
+      "css": ".ds-status{display:inline-flex;align-items:center;gap:8px;font:500 13px 'Hanken Grotesk',system-ui,sans-serif;color:var(--ink,#141518);margin-right:16px}.ds-status::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--live,#0e8a43)}.ds-old{color:var(--muted,#5f6268)}.ds-old::before{background:none;border:1.5px solid var(--muted,#5f6268)}"
+    },
+    {
+      "name": "Timetable",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "Build history; live row carries an inset accent bar.",
+      "html": "<table class=\"ds-tt\"><thead><tr><th>Built (UTC)</th><th>PHP</th><th>Status</th></tr></thead><tbody><tr class=\"ds-live\"><td class=\"m\">2026-10-21 04:12</td><td class=\"m\">8.5.1</td><td>Live</td></tr><tr><td class=\"m\">2026-10-14 04:09</td><td class=\"m\">8.5.0</td><td style=\"color:var(--muted,#5f6268)\">Superseded</td></tr></tbody></table>",
+      "css": ".ds-tt{border-collapse:collapse;width:100%;font:400 14px 'Hanken Grotesk',system-ui,sans-serif;color:var(--ink,#141518)}.ds-tt th{text-align:left;font-weight:500;font-size:12px;color:var(--muted,#5f6268);padding:0 16px 10px 12px;border-bottom:2px solid var(--ink,#141518)}.ds-tt td{padding:14px 16px 14px 12px;border-bottom:1px solid var(--rule,#e3e4e6)}.ds-tt .m{font:13px 'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}.ds-live td:first-child{box-shadow:inset 3px 0 var(--accent,#0a64c8)}"
+    },
+    {
+      "name": "Facts List",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "On-board facts: muted label left, mono value right.",
+      "html": "<dl class=\"ds-facts\"><div><dt>PHP</dt><dd>8.5.1</dd></div><div><dt>redis</dt><dd>6.2.0</dd></div></dl>",
+      "css": ".ds-facts{max-width:300px;margin:0}.ds-facts div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule,#e3e4e6);font:14px 'Hanken Grotesk',system-ui,sans-serif}.ds-facts dt{color:var(--muted,#5f6268)}.ds-facts dd{margin:0;font:500 13px 'JetBrains Mono',ui-monospace,monospace;color:var(--ink,#141518)}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "",
+      "description": "Header nav; current page ink with 2px underline on the header rule.",
+      "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Images</a><a href=\"#\">Matrix</a><a href=\"#\">Changelog</a></nav>",
+      "css": ".ds-nav{display:flex;gap:28px;border-bottom:1px solid var(--rule,#e3e4e6)}.ds-nav a{color:var(--muted,#5f6268);text-decoration:none;font:500 14px 'Hanken Grotesk',system-ui,sans-serif;padding:21px 0 19px;border-bottom:2px solid transparent}.ds-nav a:hover{color:var(--ink,#141518)}.ds-nav a[aria-current=page]{color:var(--ink,#141518);border-bottom-color:var(--ink,#141518)}.ds-nav a:focus-visible{outline:2px solid var(--accent,#0a64c8);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Station Timetable",
+    "overview": "The site is a departures board for container images. Each PHP minor is a transit line with its own colour; each published build is a departure row in a timetable; the image reference is the destination, set large in monospace. The ground is near-black, the header is quiet neutral ink, and the only saturated colour on any page belongs to a PHP line. Everything else is ink, grey and hairline rules.\n\nDensity is operational, not editorial: tables, definition lists and segmented controls carry the content, separated by 1px rules rather than cards. The grey board is the one tonal surface, used for the home hero, the image picker and the destination band. Depth is flat throughout.\n\nThe signature move: on an image page (and the home hero), the selected line's colour becomes the page accent. Focus rings, the primary Copy button, the live-row marker in the timetable and text selection all repaint to the chosen PHP version.",
+    "keyCharacteristics": [
+      "Line colours belong to PHP versions only; nothing else is coloured.",
+      "Selected line becomes the accent (image pages and home hero).",
+      "Hanken Grotesk for interface; JetBrains Mono only for tags, digests, versions and other machine strings.",
+      "Flat surfaces, hairline rules, one grey board.",
+      "Light and dark follow the browser, with a persisted manual override."
+    ],
+    "rules": [
+      {
+        "name": "The Lines Only Rule",
+        "body": "Saturated colour belongs only to PHP versions (8.2 violet, 8.3 teal, 8.4 orange, 8.5 blue, 8.6 amber) plus live green. Variants, OSes, architectures and nginx are ink. Never introduce a colour for anything that is not a PHP line.",
+        "section": "colors"
+      },
+      {
+        "name": "The Selected Line Is The Accent Rule",
+        "body": "On image and build pages and in the home hero, `--accent` equals the selected `--line`. Focus outlines, the primary button, the timetable's live-row inset marker and `::selection` follow it. On nginx pages (no PHP line) the line falls back to ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dashed RC Rule",
+        "body": "A release candidate line is drawn amber with a 1.5px dashed inset outline in dark ink and dark ink text. Stable lines are solid with white text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Machine Strings Rule",
+        "body": "JetBrains Mono is for things a machine reads: image tags, digests, version numbers, build timestamps, commit hashes. Prose, labels, navigation and button text stay in Hanken Grotesk.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Not Card Rule",
+        "body": "Group content with rules and spacing, never with shadowed cards.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do set `data-line=\"8.x\"` on any element that represents a PHP version and read `var(--line)`; never hardcode a line hex in a component.",
+      "Do let the selected line drive `--accent` on image pages and the home hero, and fall back to ink when no PHP line applies.",
+      "Do draw 8.6 (and any future RC) amber with a dashed inset outline and dark ink text.",
+      "Do set tags, digests, versions, timestamps and commit hashes in JetBrains Mono with tabular numerals.",
+      "Do separate rows with 1px rules and keep surfaces flat.",
+      "Do define every neutral for both themes: once under `prefers-color-scheme: dark` guarded by `:root:not([data-theme='light'])`, and again under `:root[data-theme='dark']`. The manual choice is stored in `localStorage.theme` and applied before paint; \"Auto\" clears it."
+    ],
+    "donts": [
+      "Don't give colour to OSes, variants, architectures or nginx; they stay ink.",
+      "Don't use green for anything but the live status dot.",
+      "Don't use mono for prose, labels or buttons.",
+      "Don't put white text or a focus ring directly on 8.6 amber; use dark ink text and the amber-accent-ink accent.",
+      "Don't add drop shadows or card containers."
+    ]
+  }
+}

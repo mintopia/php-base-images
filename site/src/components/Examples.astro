@@ -1,0 +1,57 @@
+---
+import Code from './Code.astro';
+import { latestStable, type Image } from '../lib/data';
+
+interface Props { img: Image; ref: string }
+const { img, ref } = Astro.props;
+const fpm = `ghcr.io/mintopia/php:${img.variant === 'nginx' ? latestStable : img.version}-${img.os}-php-fpm`;
+const pair = `services:
+  web:
+    image: ${img.variant === 'nginx' ? ref : `ghcr.io/mintopia/nginx:${img.os}`}
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./public:/app/public:ro"
+    environment:
+      PHP_FPM_HOST: php
+  php:
+    image: ${img.variant === 'nginx' ? fpm : ref}
+    volumes:
+      - "./:/app"`;
+const dockerfile = img.variant === 'nginx'
+  ? `FROM ${ref}
+COPY public /app/public`
+  : `FROM ${ref}
+RUN install-php-extensions intl
+COPY . /app`;
+const compose = {
+  cli: `services:
+  worker:
+    image: ${ref}
+    volumes:
+      - "./:/app"
+    command: php artisan queue:work`,
+  'php-fpm': pair,
+  nginx: pair,
+  'php-fpm-nginx': `services:
+  app:
+    image: ${ref}
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./:/app"
+    environment:
+      PUID: 1000`,
+  frankenphp: `services:
+  app:
+    image: ${ref}
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./:/app"
+    environment:
+      FRANKENPHP_CONFIG: worker ./public/index.php`,
+}[img.variant];
+---
+<Code code={dockerfile} lang="Dockerfile" />
+<Code code={compose} lang="compose.yaml" />

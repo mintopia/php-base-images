@@ -1,0 +1,117 @@
+name: site
+
+on:
+  workflow_call:
+    inputs:
+      records:
+        description: Append this run's build records to the site-data branch
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: [site/**, README.md, versions.json, scripts/tags.sh, .github/workflows/site.yml]
+  pull_request:
+    paths: [site/**, .github/workflows/site.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      data: ${{ steps.data.outputs.sha }}
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        if: inputs.records
+        with:
+          pattern: record-*
+          path: records
+          merge-multiple: true
+      # one file per record so concurrent runs never conflict; the rebase loop absorbs races
+      - name: Update site-data
+        env:
+          RECORDS: ${{ inputs.records }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git fetch origin site-data:site-data; then
+            git worktree add data site-data
+          else
+            git worktree add --orphan -b site-data data
+            scripts/backfill-records.sh data/records
+          fi
+          if [ "$RECORDS" = true ]; then
+            shopt -s nullglob
+            mkdir -p data/records
+            for f in records/*.json; do
+              t=$(jq -r .time "$f")
+              cp "$f" "data/records/${t//:/}-$(basename "$f")"
+            done
+          fi
+          cd data
+          mkdir -p records
+          git add records
+          git diff --cached --quiet && exit 0
+          git commit -qm "Record builds from run $GITHUB_RUN_ID"
+          [ "$GITHUB_EVENT_NAME" != pull_request ] || exit 0
+          for _ in 1 2 3 4 5; do
+            git push -q origin site-data && exit 0
+            git pull -q --rebase origin site-data
+          done
+          exit 1
+      - id: data
+        run: echo "sha=$(git -C data rev-parse -q --verify HEAD || echo none)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Build
+        working-directory: site
+        env:
+          SITE_RECORDS: ${{ github.workspace }}/data/records
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      # runs race; a run whose site-data has since moved on would deploy older data over newer
+      - id: current
+        env:
+          BUILT: ${{ needs.build.outputs.data }}
+          REPO: ${{ github.repository }}
+        run: |
+          head=$(git ls-remote "https://github.com/$REPO" refs/heads/site-data | cut -f1)
+          if [ "$BUILT" != none ] && [ -n "$head" ] && [ "$head" != "$BUILT" ]; then
+            echo "::notice::site-data moved to $head after this build ($BUILT); a newer run deploys it"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+      - id: deploy
+        if: steps.current.outputs.stale != 'true'
+        uses: actions/deploy-pages@v5

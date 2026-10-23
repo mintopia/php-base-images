@@ -2,6 +2,8 @@
 
 Multi-arch (amd64, arm64) PHP images for Alpine and Debian trixie, published to `ghcr.io/mintopia/php`, with a matching nginx image at `ghcr.io/mintopia/nginx`. They replace `mintopia/php-docker` and `mintopia/php-frankenphp-base`.
 
+The [image site](https://mintopia.github.io/php-base-images/) has a tag builder, every image with its build history, the feature matrix and a changelog. It is rebuilt after every published build from `site/`.
+
 - [Tags](#tags) and [Images](#images)
 - [What's inside](#whats-inside)
 - [Configuration](#configuration): [Common](#common), [php-fpm](#php-fpm), [nginx](#nginx), [FrankenPHP](#frankenphp), [Client IP and proxies](#client-ip-and-proxies)

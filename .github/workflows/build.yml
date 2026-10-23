@@ -3,7 +3,9 @@ name: build
 on:
   push:
     branches: [main]
+    paths-ignore: [site/**, .github/workflows/site.yml]
   pull_request:
+    paths-ignore: [site/**, .github/workflows/site.yml]
     types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: "17 4 * * *"
@@ -137,6 +139,9 @@ jobs:
           mkdir -p digests
           docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-cli" -r 'echo PHP_VERSION;' > digests/php-version
           cat digests/php-version
+          for t in $TARGETS; do
+            [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
+          done
       - name: Push by digest
         if: env.PUBLISH == 'true'
         env:
@@ -200,15 +205,48 @@ jobs:
           [ "$VARIANT" != nginx ] || image=ghcr.io/mintopia/nginx
           refs=()
           php=""
+          platforms='{}'
           for arch in amd64 arm64; do
             dir="digests/digests-$VERSION-$OS-$arch"
             refs+=("$image@$(cat "$dir/$VARIANT")")
+            platforms=$(jq -c --arg a "$arch" --arg d "$(cat "$dir/$VARIANT")" '.[$a] = $d' <<<"$platforms")
             v=$(cat "$dir/php-version")
             [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
             php=$v
           done
           tags=()
-          while read -r t; do tags+=(-t "$image:$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST")
+          names=()
+          while read -r t; do tags+=(-t "$image:$t"); names+=("$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST")
           docker buildx imagetools create "${tags[@]}" "${refs[@]}"
           digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
           cosign sign --yes "$image@$digest"
+          modules=$(cat "digests/digests-$VERSION-$OS-amd64/modules-$VARIANT" 2>/dev/null \
+            | jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("[") | not))) | unique')
+          sizes=$(scripts/image-sizes.sh "$image@$digest")
+          mkdir -p record
+          docker buildx imagetools inspect "$image@$digest" --format '{{json .Image}}' \
+            | jq -c --arg time "$(date -u +%FT%TZ)" --arg run "$GITHUB_RUN_ID" --arg commit "$GITHUB_SHA" \
+              --arg image "$image" --arg version "$VERSION" --arg os "$OS" --arg variant "$VARIANT" \
+              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --argjson platforms "$platforms" --argjson modules "$modules" --argjson sizes "$sizes" \
+              '{time: $time, run: $run, commit: $commit, image: $image, version: $version, os: $os, variant: $variant,
+                php: $php, stable: $stable, digest: $digest, platforms: $platforms, tags: $ARGS.positional, modules: $modules, sizes: $sizes,
+                labels: (.["linux/amd64"].config.Labels // {})}' --args "${names[@]}" \
+            > "record/$VERSION-$OS-$VARIANT.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: record-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.variant }}
+          path: record/
+          if-no-files-found: error
+          retention-days: 1
+
+  site:
+    needs: merge
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    permissions:
+      contents: write
+      packages: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/site.yml
+    with:
+      records: ${{ needs.merge.result == 'success' || needs.merge.result == 'failure' }}

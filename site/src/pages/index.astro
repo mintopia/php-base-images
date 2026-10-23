@@ -1,0 +1,108 @@
+---
+import Base from '../layouts/Base.astro';
+import Bullet from '../components/Bullet.astro';
+import Copy from '../components/Copy.astro';
+import { images, versions, versionKeys, latestStable, extensions, ARCHES, imagePath } from '../lib/data';
+
+const base = import.meta.env.BASE_URL;
+const cli = (v: string) => images.find((i) => i.version === v && i.os === 'alpine' && i.variant === 'cli');
+const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable ? v : 'unstable');
+---
+<Base title="mintopia/php · PHP base images" description="Multi-arch PHP base images for Alpine and Debian trixie, built from php-src tags and signed with cosign." current="home">
+  <script is:inline define:vars={{ latestStable }}>
+    const q = new URLSearchParams(location.search);
+    if (q.has('v') || q.has('variant')) {
+      const [v, os, variant] = [q.get('v') || latestStable, q.get('os') || 'alpine', q.get('variant') || 'cli'];
+      location.replace(`${location.pathname}images/${variant === 'nginx' ? `nginx-${os}` : `${v}-${os}-${variant}`}/`);
+    }
+  </script>
+
+  <section class="start lined" id="start" data-line={latestStable}>
+    <h1>PHP base images</h1>
+    <p class="lede">PHP {versionKeys[0]} to {versionKeys.at(-1)} RC for Alpine and Debian trixie, on amd64 and arm64. Built from php-src and signed with cosign.</p>
+    <fieldset class="lines">
+      <legend>PHP</legend>
+      {versionKeys.map((v) => (
+        <label class="line-pick" title={versions[v].stable ? `PHP ${v}` : `PHP ${v} release candidate`}>
+          <input type="radio" name="v" value={v} checked={v === latestStable} />
+          <Bullet version={v} />
+        </label>
+      ))}
+    </fieldset>
+    {versionKeys.map((v) => {
+      const ref = `ghcr.io/mintopia/php:${alias(v)}`;
+      const php = cli(v)?.current?.php;
+      return (
+        <div class="ref" data-for={v} hidden={v !== latestStable}>
+          <code class="ref-tag">{ref}</code>
+          <Copy text={ref} label="Copy reference" primary />
+          <p class="ref-meta">
+            {php ? <span class="mono">PHP {php}</span> : <span>PHP {v}</span>}
+            <span>alpine · cli · {ARCHES.join(' + ')}</span>
+            {!versions[v].stable && <span>Release candidate, best effort</span>}
+            {cli(v) && <a href={imagePath(cli(v)!)}>Choose OS and variant</a>}
+          </p>
+        </div>
+      );
+    })}
+  </section>
+
+  <section class="page offer" aria-label="What's on offer">
+    <dl class="spec">
+      <div><dt>Variants</dt><dd>cli · php-fpm · php-fpm-nginx · frankenphp, plus a separate nginx image</dd></div>
+      <div><dt>OS</dt><dd>Alpine (default) or Debian trixie</dd></div>
+      <div><dt>Extensions</dt><dd>{extensions.length} built in, with <code>pie</code> to add more. <a href={`${base}matrix/`}>See which</a></dd></div>
+    </dl>
+    <nav class="next" aria-label="Next">
+      <a class="btn" href={`${base}images/`}>Choose an image</a>
+      <a href={`${base}usage/`}>Usage guide</a>
+    </nav>
+  </section>
+</Base>
+
+<style>
+  .start { display: flex; flex-direction: column; justify-content: center; min-height: min(72svh, 720px); background: var(--board); padding: 64px var(--gutter); border-bottom: 1px solid var(--rule); }
+  .start h1 { font-size: clamp(40px, 6vw, 80px); line-height: 1; letter-spacing: -0.03em; font-weight: 700; }
+  .lede { margin: 16px 0 48px; font-size: 18px; color: var(--muted); text-wrap: pretty; }
+  .lines { border: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .lines legend { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+  .line-pick { position: relative; cursor: pointer; }
+  .line-pick input { position: absolute; opacity: 0; }
+  .line-pick :global(.bullet) { min-width: 60px; height: 38px; font-size: 15px; border-radius: 6px; opacity: 0.5; transition: box-shadow 0.15s, opacity 0.15s, transform 0.15s; }
+  .line-pick:hover :global(.bullet) { opacity: 0.85; transform: translateY(-1px); }
+  .line-pick input:checked + :global(.bullet) { opacity: 1; box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--ink); }
+  .line-pick input:focus-visible + :global(.bullet) { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--accent); }
+
+  .ref { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 24px; align-items: center; }
+  .ref-tag { font: 500 clamp(24px, 4.2vw, 52px)/1.05 var(--mono); letter-spacing: -0.03em; overflow-wrap: anywhere; }
+  .ref :global(.btn) { height: 44px; }
+  .ref-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: var(--muted); }
+  .ref-meta .mono { color: var(--ink); }
+  .ref-meta a { color: var(--accent-text); }
+  .ref[hidden] { display: none; }
+
+  .offer { padding-top: 32px; }
+  .spec > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
+  .spec dt { color: var(--muted); }
+  .spec code { font-size: 13px; }
+  .next { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin-top: 36px; font-size: 14px; font-weight: 500; }
+  .next .btn { text-decoration: none; }
+
+
+  @media (max-width: 720px) {
+    .spec > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  }
+  @media (max-width: 560px) {
+    .ref { grid-template-columns: minmax(0, 1fr); }
+    .ref :global(.btn) { justify-self: start; }
+  }
+</style>
+
+<script>
+  const start = document.getElementById('start')!;
+  start.addEventListener('change', (e) => {
+    const v = (e.target as HTMLInputElement).value;
+    start.dataset.line = v;
+    start.querySelectorAll<HTMLElement>('.ref').forEach((r) => (r.hidden = r.dataset.for !== v));
+  });
+</script>

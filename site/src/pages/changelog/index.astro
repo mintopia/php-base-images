@@ -1,0 +1,67 @@
+---
+import Base from '../../layouts/Base.astro';
+import Bullet from '../../components/Bullet.astro';
+import { changelog, images, fmtDate, commitUrl } from '../../lib/data';
+
+const byId = new Map(images.map((i) => [i.id, i]));
+const lines = (ids: string[]) => [...new Set(ids.map((id) => byId.get(id)!).map((i) => (i.variant === 'nginx' ? 'nginx' : i.version)))].sort();
+---
+<Base title="Changelog · mintopia/php" description="What changed in the images, build by build, alongside the commits behind them." current="changelog">
+  <div class="page">
+    <header class="page-head">
+      <h1>Changelog</h1>
+      <p>Image changes are read from the recorded builds: new PHP releases, extension and component updates, and rebuilds for OS package fixes. Commits to the repository sit beside them.</p>
+    </header>
+
+    <ol class="days">
+      {changelog.map((d) => (
+        <li class="day">
+          <h2 class="date"><time datetime={d.date}>{fmtDate(d.date)}</time></h2>
+          <div class="entries">
+            {d.changes.length > 0 && (
+              <ul class="changes">
+                {d.changes.map((c) => (
+                  <li>
+                    <span class:list={['what', c.kind]}>{c.text}</span>
+                    <span class="where">
+                      {lines(c.images).map((l) => (l === 'nginx' ? <span class="bullet sm nginx-b">nginx</span> : <Bullet version={l} size="sm" />))}
+                      <span class="muted">{c.images.length} {c.images.length === 1 ? 'image' : 'images'}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {d.commits.length > 0 && (
+              <ul class="commits">
+                {d.commits.map((c) => (
+                  <li><a class="mono" href={commitUrl(c.sha)}>{c.sha.slice(0, 7)}</a> {c.subject}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+</Base>
+
+<style>
+  .days { list-style: none; max-width: 1040px; }
+  .day { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 32px; padding: 28px 0; border-top: 1px solid var(--rule); }
+  .day:first-child { border-top: 2px solid var(--ink); }
+  .date { font: 500 14px var(--mono); text-transform: none; letter-spacing: 0; margin: 0; }
+  .entries { display: grid; gap: 20px; }
+  .changes, .commits { list-style: none; display: grid; gap: 10px; }
+  .changes li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+  .what { font-weight: 500; }
+  .what.php { font-weight: 700; }
+  .what.rebuild, .what.base { font-weight: 400; }
+  .where { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+  .where .muted { margin-left: 4px; }
+  .nginx-b { background: var(--ink); color: var(--bg); }
+  .commits { font-size: 14px; color: var(--muted); }
+  .commits a { color: var(--ink); margin-right: 8px; font-size: 13px; }
+  @media (max-width: 640px) {
+    .day { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  }
+</style>
