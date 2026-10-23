@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Astro, static output, deployed to GitHub Pages at the default `mintopia.github.io/php-base-images` URL via `actions/deploy-pages`. Rebuilt every time images are published.
+Astro, static output, deployed to GitHub Pages at `php.mintopia.net` via `actions/deploy-pages`. Rebuilt every time images are published.
 
 ## Users
 
