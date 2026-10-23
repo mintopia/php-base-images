@@ -160,6 +160,7 @@ export interface Commit {
 // igbinary was never in a listed build (ADR 0017); null hides the commit
 const SUBJECTS: Record<string, string | null> = {
   a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
+  '601b64058c81c6d1f1d07d0fdb7316780be0edc6': null,
   '0d91d6e2482ee4e71ad708b30c950a20c5e11a55': 'Bundle intl, zip, exif, sockets, gmp, soap and apcu so common frameworks run without a compiler stage',
 };
 
