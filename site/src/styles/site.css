@@ -241,8 +241,8 @@ td.mono, td .mono { font-size: 0.8125rem; }
   .code figcaption .btn { height: 28px; padding: 0 10px; font-size: 0.75rem; }
   .code pre { margin: 0; border: 0; border-radius: 0; }
 
-.shiki span[style*='6A737D' i] { color: var(--muted) !important; }
-.shiki { margin: 0; padding: 16px; overflow-x: auto; font: 0.8125rem/1.6 var(--mono); background: var(--raise) !important; }
+.astro-code span[style*='6A737D' i] { color: var(--muted) !important; }
+.astro-code { margin: 0; padding: 16px; overflow-x: auto; font: 0.8125rem/1.6 var(--mono); background: var(--raise) !important; }
 
 .picker { display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: flex-end; padding: 36px var(--gutter) 28px; background: var(--board); }
 .picker .legend { display: block; font-size: 0.75rem; font-weight: 500; color: var(--muted); margin-bottom: 8px; }

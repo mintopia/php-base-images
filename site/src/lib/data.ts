@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { marked } from 'marked';
-import { codeToHtml } from 'shiki';
 
 const root = resolve(process.cwd(), '..');
 const recordsDir = process.env.SITE_RECORDS ?? resolve(root, '.site-data/records');
@@ -293,6 +292,7 @@ export const imageName = (img: Image) => (img.variant === 'nginx' ? `nginx:${img
 export const imageHost = (img: Image) => (img.variant === 'nginx' ? img.repo.replace(/\/nginx$/, '') : img.repo);
 export const imagePath = (img: Image) => `${import.meta.env.BASE_URL}images/${img.id}/`;
 export const buildPath = (img: Image, b: BuildRecord) => `${imagePath(img)}${shortDigest(b.digest)}/`;
+export const pinRef = (img: Image, b: BuildRecord) => `${img.repo}:${img.tag}@${b.digest}`;
 export const runUrl = (run: string) => (/^\d+$/.test(run) ? `${repoUrl}/actions/runs/${run}` : null);
 
 const moduleKey = (m: string) => m.toLowerCase().replace(/^zend /, '');
@@ -314,24 +314,9 @@ export const builtInModules = (() => {
 
 // README is the single source for configuration docs; the site renders its sections rather than copying them
 const readme = readFileSync(resolve(root, 'README.md'), 'utf8');
-const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml' };
-export const highlight = (code: string, lang: string) =>
-  codeToHtml(code, { lang: LANGS[lang] ?? 'text', theme: 'github-dark' });
-
-const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-
-async function render(md: string) {
-  let html = marked.parse(md, { async: false }) as string;
-  html = html.replace(/<h(\d)>(.*?)<\/h\1>/g, (_, n, text) =>
-    `<h${n} id="${text.replace(/<[^>]+>/g, '').toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-')}">${text}</h${n}>`);
-  const blocks = [...html.matchAll(/<pre><code(?: class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/g)];
-  for (const [whole, lang = 'text', body] of blocks) html = html.replace(whole, await highlight(unescape(body).replace(/\n$/, ''), lang));
-  return html;
-}
-
 // a single README table, found by the start of its header row
 export function readmeTable(header: string) {
   const start = readme.indexOf(`\n${header}`);
   const end = readme.indexOf('\n\n', start + 1);
-  return render(readme.slice(start, end));
+  return marked.parse(readme.slice(start, end), { async: false }) as string;
 }

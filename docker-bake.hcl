@@ -1,7 +1,6 @@
 variable "PHP_VERSION" { default = "8.5" }
 variable "OS" { default = "alpine" }
 variable "PLATFORMS" { default = "" }
-variable "PUSH" { default = "false" }
 variable "CACHE_REF" { default = "" }
 variable "PHP_SOURCE" {
   default = "src"
@@ -116,7 +115,6 @@ group "default" {
 target "_common" {
   dockerfile = "${OS}.Dockerfile"
   platforms  = PLATFORMS == "" ? [] : split(",", PLATFORMS)
-  output     = ["type=image,push=${PUSH}"]
   args = {
     PHP_VERSION           = VERSIONS[PHP_VERSION].tag
     FRANKENPHP_VERSION    = FRANKENPHP_VERSION
@@ -196,7 +194,6 @@ target "php-fpm-nginx" {
 target "nginx" {
   dockerfile = "${OS}.Dockerfile"
   platforms  = PLATFORMS == "" ? [] : split(",", PLATFORMS)
-  output     = ["type=image,push=${PUSH}"]
   target     = "nginx"
   tags       = [tag("nginx")]
   args       = { NGINX_VERSION = NGINX_VERSION, ALPINE_VERSION = ALPINE_VERSION }

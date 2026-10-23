@@ -9,10 +9,9 @@ import CveFix from '../../../components/CveFix.astro';
 import LiveLink from '../../../components/LiveLink.astro';
 import Versions from '../../../components/Versions.astro';
 import Pins from '../../../components/Pins.astro';
-import { pinRef } from '../../../lib/pin';
 import CveTable from '../../../components/CveTable.astro';
 import CveSummary from '../../../components/CveSummary.astro';
-import { pages, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, imageName, imageHost, isAddedExtension } from '../../../lib/data';
+import { pages, type Image, type Build, pinRef, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, imageName, imageHost, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
   return pages.flatMap((img) =>
