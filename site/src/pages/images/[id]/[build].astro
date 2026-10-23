@@ -46,7 +46,7 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
         <Aliases tags={b.tags.filter((t) => t !== img.tag)} />
       </div>
       <Unstable img={img} />
-      {!b.live && <p class="note">Tags have moved on from this build. It stays pullable by digest.</p>}
+      {!b.live && <p class="note">The tags now point at a newer build. You can still pull this one by digest.</p>}
     </div>
 
     <div class="detail">
@@ -69,7 +69,7 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
         <dl class="refs">
           <div><dt>Pinned</dt><dd><code tabindex="0">{pinned}</code><Copy text={pinned} /></dd></div>
           <div><dt>Commit</dt><dd>{b.commit ? <a class="mono" href={commitUrl(b.commit)}>{b.commit}</a> : <span class="muted">Not recorded</span>}</dd></div>
-          <div><dt>Workflow run</dt><dd>{run ? <a href={run}>{b.run}</a> : <span class="muted">Not linked; recorded from the published package</span>}</dd></div>
+          <div><dt>Workflow run</dt><dd>{run ? <a href={run}>{b.run}</a> : <span class="muted">Not linked. This record came from the published package</span>}</dd></div>
           <div><dt>Package</dt><dd><a href={packageUrl(img.repo, b.package)}>View on GitHub</a></dd></div>
         </dl>
 
@@ -77,7 +77,7 @@ const crit = (b.cves ?? []).filter((c) => c.severity === 'CRITICAL');
           <>
             <h2>PHP modules <span class="muted count">{b.modules.length}</span></h2>
             <p class="modules">{b.modules.map((m) => <code class:list={['chip', { added: isAddedExtension(m) }]}>{m}</code>)}</p>
-            <p class="note">Highlighted modules are added by these images; the rest are built into PHP.</p>
+            <p class="note">Highlighted modules are extensions these images add. The rest are built into PHP.</p>
           </>
         )}
         {!b.modules?.length && img.variant !== 'nginx' && (

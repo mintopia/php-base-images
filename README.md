@@ -43,15 +43,15 @@ tests/smoke.sh php:8.5-alpine-cli cli
 
 ## CI
 
-- A push to `main` rebuilds and publishes every lane when it changes an image input (Dockerfiles, `docker-bake.hcl`, `versions.json`, `build/`, `rootfs/`, `scripts/tags.sh`); other pushes run the daily upstream check. The site deploys at the end of every build run. To rebuild after a workflow-only change, run `build` with `force`.
-- A daily job rebuilds only the images whose upstream inputs have changed or whose OS packages have CVEs with a fix available; the rest of the lane keeps its published digest. It compares the current PHP, OS, nginx, FrankenPHP, s6-overlay and extension versions against the labels on the published images, and Trivy scans the published SBOM for CVEs. Every CI build upgrades OS packages, so a rebuild ships the fix.
+- A push to `main` rebuilds and publishes every lane when it changes an image input (Dockerfiles, `docker-bake.hcl`, `versions.json`, `build/`, `rootfs/`, `scripts/tags.sh`). Other pushes run the daily upstream check. The site deploys at the end of every build run. To rebuild after a workflow-only change, run `build` with `force`.
+- A daily job rebuilds only the images whose upstream inputs have changed or whose OS packages have CVEs with a fix available. The rest of the lane keeps its published digest. It compares the current PHP, OS, nginx, FrankenPHP, s6-overlay and extension versions against the labels on the published images, and Trivy scans the published SBOM for CVEs. Every CI build upgrades OS packages, so a rebuild ships the fix.
 - A monthly job rebuilds everything, as does `workflow_dispatch` with `force`.
-- Older patch releases stay maintained: once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily and monthly rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
+- Older patch releases are still maintained. Once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily and monthly rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
 - Each PHP version builds and merges in its own call of `.github/workflows/lanes.yml`, so one version publishes without waiting for the others.
-- Every site build flags each recorded build's critical CVEs and lists all of them: OS packages from a Trivy scan of its SBOM, PHP from php-src's security advisories.
+- Each site build lists every recorded build's CVEs and flags the critical ones. OS package CVEs come from a Trivy scan of the build's SBOM, and PHP CVEs from php-src's security advisories.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
-- Published manifests are signed with cosign keyless signing. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
-- Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`; the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. Cleanup of the cache package lives in [php-base-images-cache](https://github.com/mintopia/php-base-images-cache).
+- The workflow signs published manifests with keyless cosign. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
+- Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`, and the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. [php-base-images-cache](https://github.com/mintopia/php-base-images-cache) cleans up the cache package.
 
 ### PHP source
 
@@ -172,7 +172,7 @@ This applies to `nginx`, `php-fpm-nginx` and `frankenphp`. The web server works 
 
 `NGINX_REAL_IP_FROM` and `NGINX_REAL_IP_HEADER` are still read as older names for these.
 
-Forwarded headers are believed only from addresses in `TRUSTED_PROXIES`. The [usage guide](https://php.mintopia.net/usage/#proxies) shows what PHP receives either way.
+The web server accepts forwarded headers only from addresses in `TRUSTED_PROXIES`. The [usage guide](https://php.mintopia.net/usage/#proxies) shows what PHP receives either way.
 
 Common setups:
 
@@ -186,7 +186,7 @@ Common setups:
 
 With several proxies in a chain, such as Cloudflare in front of a load balancer, list every hop's range.
 
-Don't trust `0.0.0.0/0` in production: anything that can reach the container directly could then claim any address and scheme. The status and ping allowlists check the resolved client address.
+Don't trust `0.0.0.0/0` in production. Anything that can reach the container directly could then claim any address and scheme. The status and ping allowlists check the resolved client address.
 
 `php-fpm` on its own has no HTTP side. It takes `REMOTE_ADDR` and `HTTPS` from whatever sends it FastCGI, such as the `nginx` image, so set `TRUSTED_PROXIES` there.
 

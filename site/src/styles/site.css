@@ -220,6 +220,8 @@ td.mono, td .mono { font-size: 0.8125rem; }
 .timetable tr.here td { background: var(--board); }
 .timetable tr.prev td { border-bottom: none; padding-top: 14px; }
 .timetable tr.prev a { font-size: 0.8125rem; }
+@media (min-width: 561px) { .timetable td:last-child .changes { flex-wrap: nowrap; } }
+.timetable .changes .cve { margin-left: auto; }
 .change-list { list-style: none; display: grid; gap: 8px; font-size: 0.9375rem; }
 .change-list li:not(.muted) { font-weight: 500; }
 .labels th { font-weight: 400; color: var(--muted); border-bottom: 1px solid var(--rule); padding: 10px 24px 10px 0; text-align: left; font-size: 0.75rem; white-space: nowrap; }
@@ -296,7 +298,6 @@ main:focus { outline: none; }
 .timetable td:first-child a { white-space: nowrap; }
 @media (max-width: 560px) {
   .picker { gap: 16px 24px; padding: 20px var(--gutter); }
-  .timetable .php-col { display: none; }
   .timetable td:first-child a { white-space: normal; }
 }
 @media (max-width: 719.98px) {

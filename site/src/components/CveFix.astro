@@ -11,7 +11,7 @@ const liveHasFixes = !live && os.every((c) => !inLive.has(c.id));
 const fix = php && img.parent ? `${img.parent.repo}:${img.parent.tag}` : null;
 ---
 <p class="note">
-  {php && <>The PHP CVEs are fixed by a newer PHP release{img.parent ? <>, which <a href={imagePath(img.parent)}><code>{img.parent.tag}</code></a> tracks</> : <>; a build with it follows that release</>}. </>}
+  {php && <>The PHP CVEs are fixed by a newer PHP release{img.parent ? <>, which <a href={imagePath(img.parent)}><code>{img.parent.tag}</code></a> tracks</> : <>; a build with it follows once that release is out</>}. </>}
   {os.length > 0 && (liveHasFixes ? 'The live build of this tag has the OS package fixes.' : 'The next daily check rebuilds this tag with the OS package fixes.')}
 </p>
 {fix && (

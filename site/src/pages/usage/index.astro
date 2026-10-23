@@ -175,7 +175,7 @@ const toc = [
 
       <div class="docs-body prose">
         <h2 id="run">Run</h2>
-        <p>Pick the Variant that matches how your app takes requests.</p>
+        <p>Pick the variant that matches how your app takes requests.</p>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Which variant to use">
           <table class="shapes" aria-labelledby="run">
             <thead><tr><th scope="col">You need</th><th scope="col">Variant</th></tr></thead>
@@ -251,7 +251,7 @@ const toc = [
 
         <section id="proxies">
           <h3 id="proxy-h">Behind a proxy</h3>
-          <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Your framework can trust every proxy safely. Switch the setting to see what PHP receives.</p>
+          <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Untrusted headers never reach PHP, so your framework can trust every proxy. Switch the setting to see what PHP receives.</p>
           <div class="demo">
             <div class="seg" role="radiogroup" aria-label="TRUSTED_PROXIES">
               <label><input type="radio" name="trust" value="yes" checked />Trusted: <code>172.16.0.0/12</code></label>
@@ -292,7 +292,7 @@ const toc = [
 
         <section id="hardened">
           <h3 id="hardened-h">Non-root, read-only</h3>
-          <p>Every image runs with a read-only root filesystem and no capabilities, given a tmpfs where the variant writes. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
+          <p>Every image runs with a read-only root filesystem and no capabilities, as long as each path the variant writes to is a tmpfs. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
           <Code lang="compose.yaml" code={hardened} />
           <div class="table-wrap" tabindex="0" role="region" aria-label="Writable tmpfs by variant">
             <table aria-labelledby="hardened-h">
@@ -306,7 +306,7 @@ const toc = [
               </tbody>
             </table>
           </div>
-          <p class="muted">nginx renders its config into <code>/run/nginx</code>; extra <code>*.conf</code> files mounted in <code>/etc/nginx/conf.d/</code> are still included. With FrankenPHP's automatic HTTPS, use a volume for <code>/data</code> so certificates survive restarts.</p>
+          <p class="muted">nginx renders its config into <code>/run/nginx</code>. Extra <code>*.conf</code> files mounted in <code>/etc/nginx/conf.d/</code> are still included. With FrankenPHP's automatic HTTPS, use a volume for <code>/data</code> so certificates survive restarts.</p>
         </section>
 
         <section id="status">
@@ -317,7 +317,7 @@ const toc = [
 
         <section id="logs">
           <h3 id="logs-h">Logs</h3>
-          <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing is written to files in the container.</p>
+          <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing writes log files inside the container.</p>
           <div class="table-wrap" tabindex="0" role="region" aria-label="Log output by variant">
             <table aria-labelledby="logs-h">
               <thead><tr><th scope="col">Variant</th><th scope="col">stdout</th><th scope="col">stderr</th></tr></thead>
@@ -334,7 +334,7 @@ const toc = [
         </section>
 
         <h2 id="extend">Extend</h2>
-        <p>Build your own image on top: add extensions, start-up hooks and Composer dependencies in a Dockerfile.</p>
+        <p>Build your own image on top to add extensions, start-up hooks and Composer dependencies.</p>
 
         <section id="extending">
           <h3>Extensions and start-up hooks</h3>
@@ -344,9 +344,9 @@ const toc = [
 
         <section id="composer">
           <h3>Composer</h3>
-          <p>Composer isn't in the images. Run it in a build stage on the <code>cli</code> image: it has the same PHP and extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones. Only the app and its <code>vendor/</code> reach the final stage.</p>
+          <p>Composer isn't in the images. Run it in a build stage on the <code>cli</code> image. It has the same PHP and extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones. Only the app and its <code>vendor/</code> reach the final stage.</p>
           <Code lang="Dockerfile" code={composerBuild} />
-          <p class="muted">On trixie, also install <code>unzip</code> in the build stage; Composer needs it to unpack packages.</p>
+          <p class="muted">On trixie, also install <code>unzip</code> in the build stage. Composer needs it to unpack packages.</p>
         </section>
 
         <section id="pie">
@@ -396,7 +396,7 @@ const toc = [
         </section>
 
         <h2 id="verify">Verify</h2>
-        <p>Every image is signed with cosign, keyless, by this repository's GitHub Actions workflow.</p>
+        <p>This repository's GitHub Actions workflow signs every image with keyless cosign.</p>
 
         <section id="signature">
           <h3>Verify the signature</h3>

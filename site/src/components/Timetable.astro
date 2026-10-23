@@ -4,7 +4,6 @@ import { type Image, fmtDate, shortDigest, commitUrl, buildPath, imagePath, crit
 
 interface Props { img: Image; current?: string }
 const { img, current } = Astro.props;
-const php = img.variant !== 'nginx';
 ---
 {img.builds.length === 0 ? (
   <p class="muted empty">No builds recorded yet. History starts with the next published build.</p>
@@ -12,12 +11,11 @@ const php = img.variant !== 'nginx';
   <div class="table-wrap">
     <table class="timetable">
       <caption class="sr-only">Build history</caption>
-      <thead><tr><th scope="col">Built (UTC)</th>{php && <th scope="col" class="php-col">PHP</th>}<th scope="col">Change</th><th scope="col" class="wide">Digest</th><th scope="col" class="wide">Commit</th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th scope="col">Built (UTC)</th><th scope="col">Change</th><th scope="col" class="wide">Digest</th><th scope="col" class="wide">Commit</th><th scope="col">Status</th></tr></thead>
       <tbody>
         {img.builds.map((r) => (
           <tr class:list={{ live: r.live, here: r.digest === current }}>
             <td class="mono"><a href={buildPath(img, r)} aria-current={r.digest === current ? 'page' : undefined}><span class="nw">{fmtDate(r.time)}</span> <span class="nw">{r.time.slice(11, 16)}</span></a></td>
-            {php && <td class="mono php-col">{r.php}</td>}
             <td><div class="changes">
               {r.changes.map((c) => c.kind === 'php'
                 ? <span class="php-change"><Bullet version={img.version} size="sm" />{c.text.replace(/^PHP /, '')}</span>
@@ -31,7 +29,7 @@ const php = img.variant !== 'nginx';
           </tr>
         ))}
         {img.previous && (
-          <tr class="prev"><td colspan={php ? 6 : 5}><span class="muted">Previous version:</span> <a class="mono" href={imagePath(img.previous)}>{img.previous.patch}</a></td></tr>
+          <tr class="prev"><td colspan={5}><span class="muted">Previous version:</span> <a class="mono" href={imagePath(img.previous)}>{img.previous.patch}</a></td></tr>
         )}
       </tbody>
     </table>
