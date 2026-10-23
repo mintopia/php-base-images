@@ -1,67 +1,18 @@
 ---
 import Base from '../../layouts/Base.astro';
-import Bullet from '../../components/Bullet.astro';
-import Copy from '../../components/Copy.astro';
-import { images, versions, versionKeys, latestStable, fmtTime, shortDigest, imagePath, buildPath } from '../../lib/data';
-
-const base = import.meta.env.BASE_URL;
-const groups = [
-  ...versionKeys.map((v) => ({ key: v, title: `PHP ${v}`, items: images.filter((i) => i.version === v && i.variant !== 'nginx') })),
-  { key: 'nginx', title: 'nginx', items: images.filter((i) => i.variant === 'nginx') },
-];
+import Picker from '../../components/Picker.astro';
+import { latestStable } from '../../lib/data';
 ---
-<Base title="Images · mintopia/php" description="Every published PHP and nginx image, its tags and current digest." current="images">
+<Base title="Images · mintopia/php" description="Pick a PHP version, OS and variant, or the nginx image, to see how to use it and every build." current="images">
+  <Picker />
   <div class="page">
     <header class="page-head">
-      <h1>Images</h1>
+      <h1>Choose an image</h1>
       <p>
-        Tags read <code>&lt;version&gt;-&lt;os&gt;-&lt;variant&gt;</code>. Leave a part out and it defaults to the latest stable PHP ({latestStable}),
-        <code>alpine</code> and <code>cli</code>, so <code>latest</code> is {latestStable} alpine cli. Every image is built for amd64 and arm64.
+        Pick <code>php</code> or <code>nginx</code>, then a PHP version, OS and variant. Tags read <code>&lt;version&gt;-&lt;os&gt;-&lt;variant&gt;</code>;
+        a part left out defaults to {latestStable}, <code>alpine</code> and <code>cli</code>, so <code>latest</code> is {latestStable} alpine cli.
+        Every image is built for amd64 and arm64.
       </p>
     </header>
-
-    {groups.map((g) => {
-      const php = g.items.find((i) => i.current?.php)?.current?.php;
-      return (
-        <section class="group" aria-labelledby={`g-${g.key}`}>
-          <h2 id={`g-${g.key}`} class="group-head">
-            {g.key === 'nginx' ? <span class="bullet nginx-b">nginx</span> : <Bullet version={g.key} />}
-            <span>{g.title}</span>
-            {g.key !== 'nginx' && <span class="muted">{versions[g.key].stable ? 'stable' : 'release candidate'}{php && ` · ${php}`}</span>}
-          </h2>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Tag</th><th>OS</th><th>Variant</th><th>Also tagged</th><th>Built (UTC)</th><th>Digest</th><th>Builds</th><th></th></tr></thead>
-              <tbody>
-                {g.items.map((i) => (
-                  <tr>
-                    <td><a class="mono tag" href={imagePath(i)}>{i.tag}</a></td>
-                    <td>{i.os}</td>
-                    <td>{i.variant}</td>
-                    <td><div class="aliases">{i.tags.filter((t) => t !== i.tag).map((t) => <code class="chip">{t}</code>)}</div></td>
-                    <td class="mono">{i.current ? <a href={buildPath(i, i.current)}>{fmtTime(i.current.time)}</a> : <span class="muted">—</span>}</td>
-                    <td class="mono muted" title={i.current?.digest}>{i.current ? shortDigest(i.current.digest) : '—'}</td>
-                    <td class="mono"><a href={imagePath(i)}>{i.builds.length}</a></td>
-                    <td><Copy text={`${i.repo}:${i.tag}`} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      );
-    })}
   </div>
 </Base>
-
-<style>
-  .group + .group { margin-top: 56px; }
-  .group-head { display: flex; align-items: center; gap: 12px; font-size: 18px; text-transform: none; letter-spacing: -0.01em; margin-bottom: 16px; }
-  .group-head .muted { font-size: 14px; font-weight: 400; }
-  .nginx-b { background: var(--ink); color: var(--bg); }
-  .tag { font-weight: 500; font-size: 14px; text-decoration: none; }
-  .tag:hover { text-decoration: underline; }
-  .aliases { display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
-  td.mono { white-space: nowrap; }
-  td :global(.btn) { height: 32px; padding: 0 10px; font-size: 13px; }
-</style>

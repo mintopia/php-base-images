@@ -4,7 +4,8 @@ import Bullet from '../../../components/Bullet.astro';
 import Copy from '../../../components/Copy.astro';
 import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
-import { images, type Image, type Build, ARCHES, fmtTime, shortDigest, commitUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
+import Examples from '../../../components/Examples.astro';
+import { images, type Image, type Build, fmtTime, shortDigest, commitUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
   return images.flatMap((img) =>
@@ -32,21 +33,19 @@ const run = runUrl(b.run);
       </div>
       <p class="tracks">
         {b.live ? <span class="status">Live</span> : <span class="status old">Superseded {newer && <>on {fmtTime(newer.time)} by <a href={buildPath(img, newer)}>{shortDigest(newer.digest)}</a></>}</span>}
-        <span class="muted">· tagged</span>
+        {b.tags.length > 0 && <span class="muted">· tagged</span>}
         {b.tags.map((t) => <code class="chip">{t}</code>)}
       </p>
-      {!b.live && <p class="note">Tags have moved on from this build. GHCR removes a replaced digest a day later unless a version tag such as <code>{b.tags[0]}</code> still points at it.</p>}
+      {!b.live && <p class="note">Tags have moved on from this build. GHCR removes a replaced digest a day later{b.tags[0] && <> unless a version tag such as <code>{b.tags[0]}</code> still points at it</>}.</p>}
     </div>
 
     <div class="detail">
       <div>
-        <h2>References</h2>
+        <h2>Use it</h2>
         <dl class="refs">
           <div><dt>Pinned</dt><dd><code>{pinned}</code></dd><Copy text={pinned} /></div>
-          {ARCHES.map((a) => b.platforms[a] && (
-            <div><dt>{a} only</dt><dd><code>{img.repo}@{b.platforms[a]}</code></dd><Copy text={`${img.repo}@${b.platforms[a]}`} /></div>
-          ))}
         </dl>
+        <Examples img={img} ref={pinned} />
 
         <h2>What changed</h2>
         <ul class="change-list">

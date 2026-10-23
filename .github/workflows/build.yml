@@ -222,13 +222,14 @@ jobs:
           cosign sign --yes "$image@$digest"
           modules=$(cat "digests/digests-$VERSION-$OS-amd64/modules-$VARIANT" 2>/dev/null \
             | jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("[") | not))) | unique')
+          sizes=$(scripts/image-sizes.sh "$image@$digest")
           mkdir -p record
           docker buildx imagetools inspect "$image@$digest" --format '{{json .Image}}' \
             | jq -c --arg time "$(date -u +%FT%TZ)" --arg run "$GITHUB_RUN_ID" --arg commit "$GITHUB_SHA" \
               --arg image "$image" --arg version "$VERSION" --arg os "$OS" --arg variant "$VARIANT" \
-              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --argjson platforms "$platforms" --argjson modules "$modules" \
+              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --argjson platforms "$platforms" --argjson modules "$modules" --argjson sizes "$sizes" \
               '{time: $time, run: $run, commit: $commit, image: $image, version: $version, os: $os, variant: $variant,
-                php: $php, stable: $stable, digest: $digest, platforms: $platforms, tags: $ARGS.positional, modules: $modules,
+                php: $php, stable: $stable, digest: $digest, platforms: $platforms, tags: $ARGS.positional, modules: $modules, sizes: $sizes,
                 labels: (.["linux/amd64"].config.Labels // {})}' --args "${names[@]}" \
             > "record/$VERSION-$OS-$VARIANT.json"
       - uses: actions/upload-artifact@v7

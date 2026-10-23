@@ -196,7 +196,7 @@
     "typographyMeta": {
       "display": {
         "displayName": "Destination",
-        "purpose": "Builder image tag, mono, the reference read large."
+        "purpose": "Image tag on image pages and the home hero reference, mono, read large."
       },
       "headline": {
         "displayName": "Page title",
@@ -223,7 +223,7 @@
       {
         "name": "pick-ring",
         "value": "0 0 0 2px var(--board), 0 0 0 4px var(--ink)",
-        "purpose": "Checked line bullet in the picker (accent instead of ink on focus)."
+        "purpose": "Current line bullet in the picker (accent instead of ink on focus)."
       },
       {
         "name": "live-row-bar",
@@ -276,8 +276,8 @@
       "name": "Segmented Control",
       "kind": "input",
       "refersTo": "segmented-option",
-      "description": "OS / variant / arch / theme picker; selected option fills ink.",
-      "html": "<div class=\"ds-seg\"><label><input type=\"radio\" name=\"ds-os\" checked>alpine</label><label><input type=\"radio\" name=\"ds-os\">trixie</label></div>",
+      "description": "Image / OS / variant picker; current option fills ink.",
+      "html": "<div class=\"ds-seg\"><a aria-current=\"page\" href=\"#\">alpine</a><a href=\"#\">trixie</a></div>",
       "css": ".ds-seg{display:inline-flex;border:1px solid var(--control,#c4c6ca);border-radius:6px;overflow:hidden;background:var(--raise,#fff)}.ds-seg label{position:relative;display:grid;place-items:center;min-height:38px;padding:0 14px;font:500 14px 'Hanken Grotesk',system-ui,sans-serif;color:var(--muted,#5f6268);border-left:1px solid var(--control,#c4c6ca);cursor:pointer}.ds-seg label:first-child{border-left:0}.ds-seg input{position:absolute;opacity:0}.ds-seg label:hover{color:var(--ink,#141518)}.ds-seg label:has(input:checked){background:var(--ink,#141518);color:var(--bg,#fff)}.ds-seg label:has(input:focus-visible){outline:2px solid var(--accent,#0a64c8);outline-offset:-4px}"
     },
     {
@@ -333,16 +333,16 @@
       "kind": "nav",
       "refersTo": "",
       "description": "Header nav; current page ink with 2px underline on the header rule.",
-      "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Builder</a><a href=\"#\">Images</a><a href=\"#\">Matrix</a><a href=\"#\">Changelog</a></nav>",
+      "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Images</a><a href=\"#\">Matrix</a><a href=\"#\">Changelog</a></nav>",
       "css": ".ds-nav{display:flex;gap:28px;border-bottom:1px solid var(--rule,#e3e4e6)}.ds-nav a{color:var(--muted,#5f6268);text-decoration:none;font:500 14px 'Hanken Grotesk',system-ui,sans-serif;padding:21px 0 19px;border-bottom:2px solid transparent}.ds-nav a:hover{color:var(--ink,#141518)}.ds-nav a[aria-current=page]{color:var(--ink,#141518);border-bottom-color:var(--ink,#141518)}.ds-nav a:focus-visible{outline:2px solid var(--accent,#0a64c8);outline-offset:2px}"
     }
   ],
   "narrative": {
     "northStar": "The Station Timetable",
-    "overview": "The site is a departures board for container images. Each PHP minor is a transit line with its own colour; each published build is a departure row in a timetable; the image reference is the destination, set large in monospace. The ground is plain white (near-black in dark), the header is quiet neutral ink, and the only saturated colour on any page belongs to a PHP line. Everything else is ink, grey and hairline rules.\n\nDensity is operational, not editorial: tables, definition lists and segmented controls carry the content, separated by 1px rules rather than cards. The grey board is the one tonal surface, used for the selection area and destination band. Depth is flat throughout.\n\nThe signature move: on the builder, the selected line's colour becomes the page accent. Focus rings, the primary Copy button, the live-row marker in the timetable and text selection all repaint to the chosen PHP version.",
+    "overview": "The site is a departures board for container images. Each PHP minor is a transit line with its own colour; each published build is a departure row in a timetable; the image reference is the destination, set large in monospace. The ground is near-black, the header is quiet neutral ink, and the only saturated colour on any page belongs to a PHP line. Everything else is ink, grey and hairline rules.\n\nDensity is operational, not editorial: tables, definition lists and segmented controls carry the content, separated by 1px rules rather than cards. The grey board is the one tonal surface, used for the home hero, the image picker and the destination band. Depth is flat throughout.\n\nThe signature move: on an image page (and the home hero), the selected line's colour becomes the page accent. Focus rings, the primary Copy button, the live-row marker in the timetable and text selection all repaint to the chosen PHP version.",
     "keyCharacteristics": [
       "Line colours belong to PHP versions only; nothing else is coloured.",
-      "Selected line becomes the accent (builder scope).",
+      "Selected line becomes the accent (image pages and home hero).",
       "Hanken Grotesk for interface; JetBrains Mono only for tags, digests, versions and other machine strings.",
       "Flat surfaces, hairline rules, one grey board.",
       "Light and dark follow the browser, with a persisted manual override."
@@ -355,7 +355,7 @@
       },
       {
         "name": "The Selected Line Is The Accent Rule",
-        "body": "Within the builder, `--accent` equals the selected `--line`. Focus outlines, the primary button, the timetable's live-row inset marker and `::selection` follow it. With nginx selected (no PHP line) the line falls back to ink.",
+        "body": "On image and build pages and in the home hero, `--accent` equals the selected `--line`. Focus outlines, the primary button, the timetable's live-row inset marker and `::selection` follow it. On nginx pages (no PHP line) the line falls back to ink.",
         "section": "colors"
       },
       {
@@ -376,7 +376,7 @@
     ],
     "dos": [
       "Do set `data-line=\"8.x\"` on any element that represents a PHP version and read `var(--line)`; never hardcode a line hex in a component.",
-      "Do let the selected line drive `--accent` inside the builder, and fall back to ink when no PHP line applies.",
+      "Do let the selected line drive `--accent` on image pages and the home hero, and fall back to ink when no PHP line applies.",
       "Do draw 8.6 (and any future RC) amber with a dashed inset outline and dark ink text.",
       "Do set tags, digests, versions, timestamps and commit hashes in JetBrains Mono with tabular numerals.",
       "Do separate rows with 1px rules and keep surfaces flat.",

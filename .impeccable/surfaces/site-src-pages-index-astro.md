@@ -2,20 +2,19 @@
 version: 1
 slug: "site-src-pages-index-astro"
 primary_target: "site/src/pages/index.astro"
-related_targets: ["site/src/pages/images","site/src/pages/matrix","site/src/pages/changelog"]
+related_targets: []
 ---
 
-# Surface: image site (builder, images, matrix, changelog)
+# Surface: front page
 
-Mode: Operate (builder, images) with Read pages (matrix, changelog). Code-led.
-Audience/job: developers resolving a PHP base image to an exact, pinnable reference and tracing what changed between builds.
-Constraints: all data derived from versions.json, scripts/tags.sh and site-data records; Astro static on GitHub Pages; dark only, by the user's choice: no light theme and no switcher.
+Mode: Persuade. Code-led. Inherits the Station Timetable world (DESIGN.md).
+Audience/job: first-time visitors deciding whether these images fit; action is copying a reference.
 
 ## Direction contract
 
-THESIS: The image catalogue as a railway timetable: every PHP version is a coloured line, every build a departure row. Refuses the docs-sidebar-plus-code-block page.
-OWN-WORLD: White (or near-black in dark) ground, quiet neutral header with ink type, grey selection board. Line colours belong only to PHP versions: 8.2 violet, 8.3 teal, 8.4 orange, 8.5 blue, 8.6 RC amber drawn dashed. Green dot = live, hollow = superseded. Hanken Grotesk UI, JetBrains Mono for tags, digests, versions.
-STORY: Visitor picks a line, OS, variant, arch; reads the reference large; copies it; sees the timetable of builds and what is on board; follows to matrix or changelog.
-FIRST VIEWPORT: Neutral header with brand and nav. Grey board: line bullets for PHP, segmented OS / variant / arch. Destination row: line bullet + tag at ~52px mono + Copy button right. Alias chips beneath. Below: builds timetable (left) and on-board facts (right). Signature move: the selected line's colour becomes the page accent (focus rings, copy button, timetable current marker, selection highlight).
-FORM: Station Timetable, my top grounded candidate (rank 1), steered by the user: add colour, drop red header, add dark mode. seed: none (unavailable)
+THESIS: The basics of what the images offer, stated plainly, under one copyable reference. Refuses a map or illustrated hero (user rejected both).
+OWN-WORLD: Station Timetable tokens; line bullets are the only colour; hairline-ruled spec rows, no cards.
+STORY: Visitor reads the one-line offer, picks a PHP line, copies its reference, scans versions / variants / OS / platforms / extensions / provenance, then goes to builder, images or usage.
+FIRST VIEWPORT: Headline + one-sentence offer on ground; grey board with PHP line picker and the reference at display mono with Copy primary (accent follows selected line); spec rows begin below.
+FORM: user-pinned after two re-rolls ("the hero needs to focus on the basics of what we offer"). seed: none (unavailable)
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

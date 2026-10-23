@@ -1,0 +1,60 @@
+---
+import Bullet from './Bullet.astro';
+import { images, versions, versionKeys, latestStable, VARIANTS, OSES, imagePath, type Image } from '../lib/data';
+
+// without an image, nothing is selected and every option links from the defaults
+interface Props { img?: Image }
+const { img } = Astro.props;
+const nginx = img?.variant === 'nginx';
+const v = nginx || !img ? latestStable : img.version;
+const os = img?.os ?? 'alpine';
+const variant = nginx || !img ? 'cli' : img.variant;
+const href = (v: string, os: string, variant: string) => {
+  const hit = images.find((i) => i.os === os && i.variant === variant && (variant === 'nginx' || i.version === v));
+  return hit && imagePath(hit);
+};
+const on = (yes: boolean) => (img && yes ? 'page' : undefined);
+---
+<nav class="board picker" aria-label="Choose an image">
+  <div class="field">
+    <span class="legend">Image</span>
+    <div class="seg">
+      <a href={href(v, os, variant)} aria-current={on(!nginx)}>php</a>
+      <a href={href(v, os, 'nginx')} aria-current={on(nginx)}>nginx</a>
+    </div>
+  </div>
+  {!nginx && (
+    <div class="field">
+      <span class="legend">PHP</span>
+      <div class="lines">
+        {versionKeys.map((k) => {
+          const h = href(k, os, variant);
+          const title = versions[k].stable ? `PHP ${k}` : `PHP ${k} release candidate`;
+          return h
+            ? <a class="line-pick" href={h} title={title} aria-current={on(k === v)}><Bullet version={k} /></a>
+            : <span class="line-pick off" title={`${title}: no ${variant} image`}><Bullet version={k} /></span>;
+        })}
+      </div>
+    </div>
+  )}
+  <div class="field">
+    <span class="legend">OS</span>
+    <div class="seg">
+      {OSES.map((o) => {
+        const h = href(v, o, nginx ? 'nginx' : variant);
+        return h ? <a href={h} aria-current={on(o === os)}>{o}</a> : <span aria-disabled="true">{o}</span>;
+      })}
+    </div>
+  </div>
+  {!nginx && (
+    <div class="field">
+      <span class="legend">Variant</span>
+      <div class="seg">
+        {VARIANTS.map((t) => {
+          const h = href(v, os, t);
+          return h ? <a href={h} aria-current={on(t === variant)}>{t}</a> : <span aria-disabled="true" title={`No PHP ${v} ${t} image`}>{t}</span>;
+        })}
+      </div>
+    </div>
+  )}
+</nav>

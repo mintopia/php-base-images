@@ -35,6 +35,7 @@ export interface BuildRecord {
   platforms: Record<string, string>;
   tags: string[];
   modules?: string[];
+  sizes?: Record<string, number>;
   labels: Record<string, string>;
 }
 
@@ -102,7 +103,8 @@ function diff(prev: BuildRecord | undefined, cur: BuildRecord): Change[] {
     if (before[name] && before[name] !== v) out.push({ kind: 'component', text: `${name} ${before[name]} → ${v}` });
   }
   if (out.length === 0 && prev.labels[BASE] && prev.labels[BASE] !== cur.labels[BASE]) {
-    out.push({ kind: 'base', text: 'New OS base image' });
+    const name = cur.labels['org.opencontainers.image.base.name']?.replace('docker.io/library/', '');
+    out.push({ kind: 'base', text: name ? `${name} base image updated` : 'New OS base image' });
   }
   if (out.length === 0) out.push({ kind: 'rebuild', text: 'Rebuilt, no tracked version changed' });
   return out;
@@ -121,14 +123,7 @@ function image(version: string, os: string, variant: Variant): Image {
   const mine = records
     .filter((r) => r.os === os && r.variant === variant && (variant === 'nginx' || r.version === version))
     .sort((a, b) => a.time.localeCompare(b.time));
-  // a rebuild with no tracked change replaces the build before it, which keeps its changes
-  const kept: { r: BuildRecord; changes: Change[] }[] = [];
-  for (const r of mine) {
-    const prev = kept.at(-1);
-    const changes = diff(prev?.r, r);
-    if (prev && changes.every((c) => c.kind === 'rebuild')) prev.r = r;
-    else kept.push({ r, changes });
-  }
+  const kept = mine.map((r, i) => ({ r, changes: diff(mine[i - 1], r) }));
   const builds: Build[] = kept
     .map(({ r, changes }, i) => ({ ...r, changes, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
     .reverse();
@@ -204,6 +199,7 @@ export const repoUrl = 'https://github.com/mintopia/php-base-images';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
+export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
 export const commitUrl = (sha: string) => `${repoUrl}/commit/${sha}`;
 export const imagePath = (img: Image) => `${import.meta.env.BASE_URL}images/${img.id}/`;

@@ -4,7 +4,9 @@ import Bullet from '../../../components/Bullet.astro';
 import Copy from '../../../components/Copy.astro';
 import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
-import { images, latestStable, type Image, ARCHES } from '../../../lib/data';
+import Examples from '../../../components/Examples.astro';
+import Picker from '../../../components/Picker.astro';
+import { images, type Image } from '../../../lib/data';
 
 export function getStaticPaths() {
   return images.map((img) => ({ params: { id: img.id }, props: { img } }));
@@ -13,12 +15,11 @@ const { img } = Astro.props as { img: Image };
 const base = import.meta.env.BASE_URL;
 const ref = `${img.repo}:${img.tag}`;
 const cur = img.current;
-const builder = `${base}?${new URLSearchParams({ v: img.variant === 'nginx' ? latestStable : img.version, os: img.os, variant: img.variant })}`;
 ---
-<Base title={`${img.tag} · mintopia/php`} description={`${ref}: current digest, contents and every recorded build.`} current="images">
+<Base title={`${img.tag} · mintopia/php`} description={`${ref}: how to use it, what is in it and every recorded build.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
+    <Picker img={img} />
     <div class="dest-band">
-      <nav class="crumbs" aria-label="Breadcrumb"><a href={`${base}images/`}>Images</a><span>/</span><span aria-current="page">{img.tag}</span></nav>
       <div class="dest">
         {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
         <h1><small>{img.repo}</small>{img.tag}</h1>
@@ -27,19 +28,15 @@ const builder = `${base}?${new URLSearchParams({ v: img.variant === 'nginx' ? la
       <p class="tracks">
         {img.tags.filter((t) => t !== img.tag).length > 0 && <span class="muted">Also tagged</span>}
         {img.tags.filter((t) => t !== img.tag).map((t) => <code class="chip">{t}</code>)}
-        <a class="h2-link" href={builder}>Open in builder</a>
       </p>
     </div>
     <div class="detail">
       <div>
         <h2>Use it</h2>
         <dl class="refs">
-          <div><dt>Dockerfile</dt><dd><code>FROM {ref}</code></dd><Copy text={`FROM ${ref}`} /></div>
-          {cur && <div><dt>Pinned</dt><dd><code>{ref}@{cur.digest}</code></dd><Copy text={`${ref}@${cur.digest}`} /></div>}
-          {cur && ARCHES.map((a) => cur.platforms[a] && (
-            <div><dt>{a} only</dt><dd><code>{img.repo}@{cur.platforms[a]}</code></dd><Copy text={`${img.repo}@${cur.platforms[a]}`} /></div>
-          ))}
+          <div><dt>Image</dt><dd><code>{ref}</code></dd><Copy text={ref} /></div>
         </dl>
+        <Examples img={img} ref={ref} />
         <h2>Every build <span class="muted count">{img.builds.length}</span></h2>
         <Timetable img={img} />
       </div>
