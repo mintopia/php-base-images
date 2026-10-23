@@ -185,30 +185,34 @@ for key in "${selected[@]}"; do
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
 
-		stale=()
 		if ! $all; then
+			# every publish is permanent, so only stale targets are rebuilt
+			stale=() rebuild=()
 			for t in "${targets[@]}"; do
 				if [ "$t" = nginx ]; then ref=ghcr.io/mintopia/nginx:$os; else ref=ghcr.io/mintopia/php:$key-$os-$t; fi
-				if ! published=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null); then
-					stale+=("$t(missing)")
-					continue
+				reasons=()
+				if published=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null); then
+					exp=$(expected_labels "$t" "$vars" "$exts")
+					for arch in "${archs[@]}"; do
+						diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
+							'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
+						[ -z "$diff" ] || reasons+=("$arch($diff)")
+					done
+					if [ ${#reasons[@]} -eq 0 ]; then
+						cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
+						[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
+					fi
+				else
+					reasons=(missing)
 				fi
-				exp=$(expected_labels "$t" "$vars" "$exts")
-				for arch in "${archs[@]}"; do
-					diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
-						'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
-					[ -z "$diff" ] || stale+=("$t/$arch($diff)")
-				done
-				# any stale target rebuilds the whole lane, so only scan while it still looks current
-				[ ${#stale[@]} -eq 0 ] || continue
-				cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
-				[ -z "$cves" ] || stale+=("$t(fixable CVEs $cves)")
+				[ ${#reasons[@]} -eq 0 ] || { stale+=("$t: ${reasons[*]}"); rebuild+=("$t"); }
 			done
-			if [ ${#stale[@]} -eq 0 ]; then
+			if [ ${#rebuild[@]} -eq 0 ]; then
 				log "up to date: $key $os"
 				continue
 			fi
-			log "stale: $key $os: ${stale[*]}"
+			log "stale: $key $os: $(IFS=';'; echo "${stale[*]}")"
+			targets=("${rebuild[@]}")
 		fi
 
 		for arch in "${archs[@]}"; do
