@@ -208,6 +208,7 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           STABLE: ${{ matrix.stable }}
           LATEST: ${{ matrix.latest }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           image=ghcr.io/mintopia/php
           [ "$VARIANT" != nginx ] || image=ghcr.io/mintopia/nginx
@@ -230,6 +231,8 @@ jobs:
           done
           digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
           cosign sign --yes "$image@$digest"
+          package=$(gh api "/users/$GITHUB_REPOSITORY_OWNER/packages/container/${image##*/}/versions?per_page=100" \
+            -q ".[] | select(.name == \"$digest\") | .id" || true)
           platforms=$(docker buildx imagetools inspect "$image@$digest" --raw \
             | jq -c '[.manifests[] | select(.platform.os == "linux") | {key: .platform.architecture, value: .digest}] | from_entries')
           modules=$(cat "digests/digests-$VERSION-$OS-amd64/modules-$VARIANT" 2>/dev/null \
@@ -239,9 +242,9 @@ jobs:
           docker buildx imagetools inspect "$image@$digest" --format '{{json .Image}}' \
             | jq -c --arg time "$(date -u +%FT%TZ)" --arg run "$GITHUB_RUN_ID" --arg commit "$GITHUB_SHA" \
               --arg image "$image" --arg version "$VERSION" --arg os "$OS" --arg variant "$VARIANT" \
-              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --argjson platforms "$platforms" --argjson modules "$modules" --argjson sizes "$sizes" \
+              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --arg package "$package" --argjson platforms "$platforms" --argjson modules "$modules" --argjson sizes "$sizes" \
               '{time: $time, run: $run, commit: $commit, image: $image, version: $version, os: $os, variant: $variant,
-                php: $php, stable: $stable, digest: $digest, platforms: $platforms, tags: $ARGS.positional, modules: $modules, sizes: $sizes,
+                php: $php, stable: $stable, digest: $digest, package: $package, platforms: $platforms, tags: $ARGS.positional, modules: $modules, sizes: $sizes,
                 labels: (.["linux/amd64"].config.Labels // {})}' --args "${names[@]}" \
             > "record/$VERSION-$OS-$VARIANT.json"
       - uses: actions/upload-artifact@v7

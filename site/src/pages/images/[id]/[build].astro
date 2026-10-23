@@ -6,7 +6,7 @@ import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
 import Examples from '../../../components/Examples.astro';
 import Versions from '../../../components/Versions.astro';
-import { images, type Image, type Build, fmtTime, shortDigest, commitUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
+import { images, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
 
 export function getStaticPaths() {
   return images.flatMap((img) =>
@@ -58,6 +58,7 @@ const run = runUrl(b.run);
         <dl class="refs">
           <div><dt>Commit</dt><dd>{b.commit ? <a class="mono" href={commitUrl(b.commit)}>{b.commit}</a> : <span class="muted">not recorded</span>}</dd></div>
           <div><dt>Workflow run</dt><dd>{run ? <a href={run}>{b.run}</a> : <span class="muted">recorded from GHCR after publishing</span>}</dd></div>
+          <div><dt>Package</dt><dd><a href={packageUrl(img.repo, b.package)}>View on GitHub</a></dd></div>
           <div><dt>Index digest</dt><dd><code>{b.digest}</code></dd></div>
         </dl>
 

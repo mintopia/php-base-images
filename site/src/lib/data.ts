@@ -32,6 +32,7 @@ export interface BuildRecord {
   php: string;
   stable: boolean;
   digest: string;
+  package?: string;
   platforms: Record<string, string>;
   tags: string[];
   modules?: string[];
@@ -201,6 +202,7 @@ export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slic
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
 export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
+export const packageUrl = (repo: string, id?: string) => `${repoUrl}/pkgs/container/${repo.split('/').pop()}${id ? `/${id}` : ''}`;
 export const commitUrl = (sha: string) => `${repoUrl}/commit/${sha}`;
 export const imagePath = (img: Image) => `${import.meta.env.BASE_URL}images/${img.id}/`;
 export const buildPath = (img: Image, b: BuildRecord) => `${imagePath(img)}${shortDigest(b.digest)}/`;
