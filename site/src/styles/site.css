@@ -251,3 +251,4 @@ a.line-pick:hover .bullet { opacity: 0.85; transform: translateY(-1px); }
   .toc { position: static; display: flex; flex-wrap: wrap; gap: 12px 32px; }
   .toc a { border-left: 0; padding: 2px 0; }
 }
+.releases a[aria-current] { color: var(--ink); text-decoration: none; font-weight: 700; }

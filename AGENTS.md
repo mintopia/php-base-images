@@ -60,6 +60,15 @@ A series of PHP base images.
  - redis
  - gd
  - snmp
+ - intl
+ - zip
+ - exif
+ - sockets
+ - gmp
+ - soap
+ - apcu
+ - igbinary
+ - mongodb
 
 #### Security
 

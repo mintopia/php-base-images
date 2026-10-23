@@ -6,6 +6,7 @@ import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
 import Examples from '../../../components/Examples.astro';
 import Picker from '../../../components/Picker.astro';
+import Versions from '../../../components/Versions.astro';
 import { images, type Image } from '../../../lib/data';
 
 export function getStaticPaths() {
@@ -43,6 +44,7 @@ const cur = img.current;
       <aside>
         <h2>On board now</h2>
         <Facts build={cur} />
+        <Versions img={img} />
       </aside>
     </div>
   </div>

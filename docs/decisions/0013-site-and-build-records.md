@@ -10,7 +10,7 @@ The images need a public site listing every image, a builder that resolves a sel
 - `site/` is an Astro project built to static HTML and deployed to GitHub Pages by `.github/workflows/site.yml`.
 - The build workflow's merge job writes one JSON record per published manifest (time, run, commit, digest, per-arch digests, full PHP version, tags, `php -m` modules, amd64 labels) and uploads it as an artifact. The `site` job, called from `build.yml` after `merge`, copies the records into the orphan `site-data` branch as one file each under `records/`, pushes with a rebase retry, builds and deploys.
 - When `site-data` does not exist, `scripts/backfill-records.sh` seeds it from every currently tagged GHCR image.
-- Tags, versions and extensions are read from `versions.json`, record tags and `scripts/tags.sh`, and the Usage page renders the configuration sections of `README.md`; nothing on the site duplicates them by hand.
+- Tags, versions and extensions are read from `versions.json`, record tags and `scripts/tags.sh`, and the Usage page reads the proxy table from `README.md`; nothing on the site duplicates them by hand.
 - The records are the only stored state: every page, including one per image and one per build, is regenerated from them on each site build.
 - Site-only changes run `site.yml` on their own; `build.yml` ignores `site/**` so they never rebuild images.
 

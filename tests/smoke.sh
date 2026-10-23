@@ -38,7 +38,10 @@ check_php() {
 		$v = json_decode(file_get_contents("/versions.json"), true)["variable"]["VERSIONS"]["default"][PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION];
 		$missing = array_filter($v["extensions"], fn ($e) => !extension_loaded($e === "opcache" ? "Zend OPcache" : $e));
 		if ($missing) { fwrite(STDERR, "missing: " . implode(" ", $missing) . PHP_EOL); exit(1); }
-		foreach (["grpc", "redis", "opentelemetry", "protobuf"] as $e) { if (extension_loaded($e)) echo "$e=", phpversion($e), PHP_EOL; }
+		if (extension_loaded("intl") && (new NumberFormatter("de_DE", NumberFormatter::DECIMAL))->format(1234.5) !== "1.234,5") { fwrite(STDERR, "intl has no de_DE locale data" . PHP_EOL); exit(1); }
+		if (extension_loaded("igbinary") && extension_loaded("redis") && !defined("Redis::SERIALIZER_IGBINARY")) { fwrite(STDERR, "redis built without igbinary" . PHP_EOL); exit(1); }
+		if (extension_loaded("mongodb") && !str_contains(shell_exec("php --ri mongodb") ?? "", "libmongoc SSL => enabled")) { fwrite(STDERR, "mongodb built without TLS" . PHP_EOL); exit(1); }
+		foreach (["grpc", "redis", "apcu", "igbinary", "mongodb", "opentelemetry", "protobuf"] as $e) { if (extension_loaded($e)) echo "$e=", phpversion($e), PHP_EOL; }
 	' > "$work/versions" 2> "$work/stderr" || fail "$(cat "$work/stderr")"
 	[ ! -s "$work/stderr" ] || fail "startup output: $(cat "$work/stderr")"
 	while IFS='=' read -r ext version; do

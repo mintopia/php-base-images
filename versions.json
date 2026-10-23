@@ -7,37 +7,39 @@
           "stable": true,
           "os": ["alpine", "trixie"],
           "frankenphp": true,
-          "extensions": ["bcmath", "gd", "grpc", "mbstring", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+          "extensions": ["apcu", "bcmath", "exif", "gd", "gmp", "grpc", "igbinary", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp", "soap", "sockets", "zip"]
         },
         "8.3": {
           "tag": "8.3",
           "stable": true,
           "os": ["alpine", "trixie"],
           "frankenphp": true,
-          "extensions": ["bcmath", "gd", "grpc", "mbstring", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+          "extensions": ["apcu", "bcmath", "exif", "gd", "gmp", "grpc", "igbinary", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp", "soap", "sockets", "zip"]
         },
         "8.4": {
           "tag": "8.4",
           "stable": true,
           "os": ["alpine", "trixie"],
           "frankenphp": true,
-          "extensions": ["bcmath", "gd", "grpc", "mbstring", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+          "extensions": ["apcu", "bcmath", "exif", "gd", "gmp", "grpc", "igbinary", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp", "soap", "sockets", "zip"]
         },
         "8.5": {
           "tag": "8.5",
           "stable": true,
           "os": ["alpine", "trixie"],
           "frankenphp": true,
-          "extensions": ["bcmath", "gd", "grpc", "mbstring", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp"]
+          "extensions": ["apcu", "bcmath", "exif", "gd", "gmp", "grpc", "igbinary", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "protobuf", "redis", "snmp", "soap", "sockets", "zip"]
         },
         "8.6": {
           "tag": "8.6-rc",
           "stable": false,
           "os": ["alpine", "trixie"],
           "frankenphp": false,
-          "extensions": ["bcmath", "gd", "mbstring", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "snmp"],
+          "extensions": ["bcmath", "exif", "gd", "gmp", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "snmp", "soap", "sockets", "zip"],
           "dropped": {
+            "apcu": "apcu 5.1.28 passes a string as php_verror's type argument, which PHP 8.6 changed to int",
             "grpc": "grpc 1.78.1 src/php/ext/grpc calls XtOffsetOf, removed in PHP 8.6",
+            "igbinary": "igbinary 3.2.17RC1 calls zval_dtor, removed in PHP 8.6",
             "protobuf": "pie-extensions/protobuf 35.1 calls zval_dtor, removed in PHP 8.6",
             "redis": "phpredis 6.3.0 calls XtOffsetOf, removed in PHP 8.6; dev-develop builds"
           }
