@@ -34,7 +34,7 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
       const php = cli(v)?.current?.php;
       return (
         <div class="ref" data-for={v} hidden={v !== latestStable}>
-          <code class="ref-tag">{ref}</code>
+          <code class="ref-tag">{ref.split(/(?<=[/:])/).map((part) => <Fragment>{part}<wbr /></Fragment>)}</code>
           <Copy text={ref} label="Copy reference" primary />
           <p class="ref-meta">
             {php ? <span class="mono">PHP {php}</span> : <span>PHP {v}</span>}
@@ -62,21 +62,17 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
 
 <style>
   .start { display: flex; flex-direction: column; justify-content: center; min-height: min(72svh, 720px); background: var(--board); padding: 64px var(--gutter); border-bottom: 1px solid var(--rule); }
-  .start h1 { font-size: clamp(40px, 6vw, 80px); line-height: 1; letter-spacing: -0.03em; font-weight: 700; }
-  .lede { margin: 16px 0 48px; font-size: 18px; color: var(--muted); text-wrap: pretty; }
+  .start h1 { font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1; letter-spacing: -0.03em; font-weight: 700; }
+  .lede { margin: 16px 0 48px; font-size: 1.125rem; color: var(--muted); text-wrap: pretty; }
   .lines { border: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
-  .lines legend { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
-  .line-pick { position: relative; cursor: pointer; }
+  .lines legend { font-size: 0.75rem; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+  .line-pick { cursor: pointer; }
   .line-pick input { position: absolute; opacity: 0; }
-  .line-pick :global(.bullet) { min-width: 60px; height: 38px; font-size: 15px; border-radius: 6px; opacity: 0.5; transition: box-shadow 0.15s, opacity 0.15s, transform 0.15s; }
-  .line-pick:hover :global(.bullet) { opacity: 0.85; transform: translateY(-1px); }
-  .line-pick input:checked + :global(.bullet) { opacity: 1; box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--ink); }
-  .line-pick input:focus-visible + :global(.bullet) { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--accent); }
 
   .ref { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 24px; align-items: center; }
-  .ref-tag { font: 500 clamp(24px, 4.2vw, 52px)/1.05 var(--mono); letter-spacing: -0.03em; overflow-wrap: anywhere; }
+  .ref-tag { font: 500 clamp(1.5rem, 4.2vw, 3.25rem)/1.05 var(--mono); letter-spacing: -0.03em; }
   .ref :global(.btn) { height: 44px; }
-  .ref-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: var(--muted); }
+  .ref-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 0.8125rem; color: var(--muted); }
   .ref-meta .mono { color: var(--ink); }
   .ref-meta a { color: var(--accent-text); }
   .ref[hidden] { display: none; }
@@ -84,8 +80,8 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
   .offer { padding-top: 32px; }
   .spec > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
   .spec dt { color: var(--muted); }
-  .spec code { font-size: 13px; }
-  .next { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin-top: 36px; font-size: 14px; font-weight: 500; }
+  .spec code { font-size: 0.8125rem; }
+  .next { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin-top: 36px; font-size: 0.875rem; font-weight: 500; }
   .next .btn { text-decoration: none; }
 
 

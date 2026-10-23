@@ -1,0 +1,45 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import Bullet from '../../../../components/Bullet.astro';
+import CveTable from '../../../../components/CveTable.astro';
+import LiveLink from '../../../../components/LiveLink.astro';
+import Pins from '../../../../components/Pins.astro';
+import { pages, type Image, type Build, fmtTime, shortDigest, buildPath, imagePath, imageName, imageHost, scannedAt } from '../../../../lib/data';
+
+export function getStaticPaths() {
+  return pages.flatMap((img) =>
+    img.builds.filter((b) => b.cves?.length).map((b) => ({ params: { id: img.id, build: shortDigest(b.digest) }, props: { img, b } })),
+  );
+}
+const { img, b } = Astro.props as { img: Image; b: Build };
+const base = import.meta.env.BASE_URL;
+const cur = b.live ? null : img.current;
+const liveIds = new Set(cur?.cves?.map((c) => c.id));
+const fixed = cur?.cves ? b.cves!.filter((c) => !liveIds.has(c.id)).length : 0;
+---
+<Base title={`CVEs · ${imageName(img)} · ${fmtTime(b.time)} · ${img.repo.replace('ghcr.io/', '')}`} description={`Every known CVE in the ${img.repo}:${img.tag} build from ${fmtTime(b.time)} UTC.`} current="images">
+  <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
+    <div class="dest-band">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href={`${base}images/`}>Images</a><span>/</span><a href={imagePath(img)}>{imageName(img)}</a><span>/</span><a href={buildPath(img, b)}>{shortDigest(b.digest)}</a><span>/</span><span aria-current="page">CVEs</span>
+      </nav>
+      <div class="dest">
+        {img.variant === 'nginx' ? <span class="bullet lg nginx">nginx</span> : <Bullet version={img.version} size="lg" />}
+        <h1><small>{imageHost(img)} · built {fmtTime(b.time)} UTC<span class="sr-only">, </span></small>{imageName(img)}</h1>
+        <Pins img={img} b={b} />
+      </div>
+      <div class="tracks"><code>{shortDigest(b.digest)}</code>{b.live ? <span class="status">Live</span> : <><span class="status old">Superseded</span><LiveLink img={img} /></>}</div>
+    </div>
+    <div class="detail">
+      <div>
+        <h2>CVEs <span class="muted count">{b.cves!.length}</span></h2>
+        <CveTable img={img} cves={b.cves!} live={b.live ? undefined : img.current?.cves} />
+        {fixed > 0 && <p class="note">Fixed in the live build: {fixed} of {b.cves!.length}.</p>}
+      </div>
+      <aside>
+        <h2>Scan</h2>
+        <p class="note">OS packages from a Trivy scan of the image's SBOM, PHP from php-src security advisories. Scanned {fmtTime(scannedAt!)} UTC.</p>
+      </aside>
+    </div>
+  </div>
+</Base>

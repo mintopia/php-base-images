@@ -1,14 +1,14 @@
 ---
-import { type Image, fmtDate, buildPath } from '../lib/data';
+import { type Image, fmtDate, imagePath, chain } from '../lib/data';
 
-interface Props { img: Image; current?: string }
-const { img, current } = Astro.props;
-// builds are newest first, so the last write per PHP release is its latest build
-const releases = img.variant === 'nginx' ? [] : [...new Map(img.builds.toReversed().map((b) => [b.php, b])).values()].reverse();
+interface Props { img: Image }
+const { img } = Astro.props;
+const top = img.parent ?? img;
+const releases = top.variant === 'nginx' ? [] : chain(top).filter((i) => i.current);
 ---
-{releases.length > 0 && <>
-  <h2>Versions</h2>
+{releases.length > 1 && <>
+  <h2>Patch releases</h2>
   <dl class="facts releases">
-    {releases.map((b) => <div><dt><a class="mono" href={buildPath(img, b)} aria-current={b.digest === current ? 'page' : undefined}>{b.php}</a></dt><dd>{fmtDate(b.time)}</dd></div>)}
+    {releases.map((p) => <div><dt><a class="mono" href={imagePath(p)} aria-current={p.id === img.id ? 'page' : undefined}>{p.patch ?? p.current!.php}</a></dt><dd>{fmtDate(p.current!.time)}</dd></div>)}
   </dl>
 </>}

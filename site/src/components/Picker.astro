@@ -32,7 +32,7 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
           const title = versions[k].stable ? `PHP ${k}` : `PHP ${k} release candidate`;
           return h
             ? <a class="line-pick" href={h} title={title} aria-current={on(k === v)}><Bullet version={k} /></a>
-            : <span class="line-pick off" title={`${title}: no ${variant} image`}><Bullet version={k} /></span>;
+            : <span class="line-pick off" title={`${title}: no ${variant} image`}><Bullet version={k} /><span class="sr-only">: no {variant} image</span></span>;
         })}
       </div>
     </div>
@@ -42,7 +42,8 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
     <div class="seg">
       {OSES.map((o) => {
         const h = href(v, o, nginx ? 'nginx' : variant);
-        return h ? <a href={h} aria-current={on(o === os)}>{o}</a> : <span aria-disabled="true">{o}</span>;
+        const why = nginx ? `No nginx ${o} image` : `No PHP ${v} ${variant} image on ${o}`;
+        return h ? <a href={h} aria-current={on(o === os)}>{o}</a> : <span aria-disabled="true" title={why}>{o}<span class="sr-only">: {why}</span></span>;
       })}
     </div>
   </div>
@@ -52,7 +53,8 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
       <div class="seg">
         {VARIANTS.map((t) => {
           const h = href(v, os, t);
-          return h ? <a href={h} aria-current={on(t === variant)}>{t}</a> : <span aria-disabled="true" title={`No PHP ${v} ${t} image`}>{t}</span>;
+          const why = `No PHP ${v} ${t} image`;
+          return h ? <a href={h} aria-current={on(t === variant)}>{t}</a> : <span aria-disabled="true" title={why}>{t}<span class="sr-only">: {why}</span></span>;
         })}
       </div>
     </div>

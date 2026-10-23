@@ -1,0 +1,8 @@
+---
+import { type Image, buildPath, shortDigest } from '../lib/data';
+
+interface Props { img: Image; skip?: string }
+const { img, skip } = Astro.props;
+const cur = img.current;
+---
+{cur && cur.digest !== skip && <span class="muted">· Live now: <a class="mono" href={buildPath(img, cur)}>{shortDigest(cur.digest)}</a></span>}

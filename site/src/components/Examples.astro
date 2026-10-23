@@ -30,7 +30,7 @@ const compose = {
     image: ${ref}
     volumes:
       - "./:/app"
-    command: php artisan queue:work`,
+    command: php worker.php`,
   'php-fpm': pair,
   nginx: pair,
   'php-fpm-nginx': `services:

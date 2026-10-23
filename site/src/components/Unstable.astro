@@ -1,0 +1,15 @@
+---
+import { type Image, versions } from '../lib/data';
+
+interface Props { img: Image }
+const { img } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const dropped = Object.keys(versions[img.version]?.dropped ?? {});
+const list = dropped.length > 1 ? `${dropped.slice(0, -1).join(', ')} and ${dropped.at(-1)}` : dropped[0];
+---
+{img.variant !== 'nginx' && !img.stable && (
+  <p class="note unstable">
+    <strong>Unstable.</strong> PHP {img.version} is a release candidate, built best effort.
+    {list && <> No {list} yet: they don't build against {img.version}. <a href={`${base}matrix/#dropped`}>Why</a></>}
+  </p>
+)}
