@@ -7,9 +7,6 @@ on:
         description: Append this run's build records to the site-data branch
         type: boolean
         default: false
-  push:
-    branches: [main]
-    paths: [site/**, README.md, versions.json, scripts/tags.sh, .github/workflows/site.yml]
   pull_request:
     paths: [site/**, .github/workflows/site.yml]
   workflow_dispatch:
