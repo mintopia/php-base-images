@@ -9,6 +9,7 @@ export const GET: APIRoute = ({ site }) => {
     'matrix/',
     'usage/',
     'changelog/',
+    'about/',
     ...pages.flatMap((i) => [
       `images/${i.id}/`,
       ...i.builds.flatMap((b) => {

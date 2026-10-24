@@ -1,0 +1,67 @@
+---
+import Base from '../../layouts/Base.astro';
+import { images, versions, versionKeys, latestStable, extensions, repoUrl } from '../../lib/data';
+
+const base = import.meta.env.BASE_URL;
+const v = latestStable;
+const stable = versionKeys.filter((k) => versions[k].stable);
+const rc = versionKeys.filter((k) => !versions[k].stable);
+---
+<Base title="About · mintopia/php" description="What the images are, how they are built and tested, and when they are rebuilt." current="about">
+  <div class="page about">
+    <header class="page-head">
+      <h1>About</h1>
+      <p>What gets built, how a build works, and when an image is rebuilt.</p>
+    </header>
+
+    <div class="prose">
+      <h2 id="what">What gets built</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="What gets built">
+        <table aria-labelledby="what">
+          <tbody>
+            <tr><th scope="row">PHP</th><td>{stable.join(', ')}{rc.length > 0 && <Fragment>, and {rc.join(', ')} as a release candidate</Fragment>}</td></tr>
+            <tr><th scope="row">OS</th><td>Alpine (latest stable) and Debian trixie slim</td></tr>
+            <tr><th scope="row">Architectures</th><td>amd64 and arm64, in one multi-arch image</td></tr>
+            <tr><th scope="row">Variants</th><td><code>cli</code>, <code>php-fpm</code>, <code>php-fpm-nginx</code> and <code>frankenphp</code> in <code>ghcr.io/mintopia/php</code>, and an <code>nginx</code> image in <code>ghcr.io/mintopia/nginx</code> to put in front of <code>php-fpm</code></td></tr>
+            <tr><th scope="row">Extensions</th><td>{extensions.length}, all built into every image. 8.6 leaves out the ones that don't build on it yet. The <a href={`${base}matrix/`}>Matrix</a> lists them by version.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That is {images.length} images, each tagged by PHP version, OS and variant. Every patch release keeps its own tag, such as <code>{v}.13-php-fpm</code>, next to the moving <code>{v}-php-fpm</code>.</p>
+      <p>PHP 8.6 is best effort. An extension that doesn't build on the release candidate is left out until it does, and there is no 8.6 FrankenPHP image.</p>
+
+      <h2 id="build">How an image is built</h2>
+      <p>PHP is compiled from the latest php-src tag for each minor version, so a release ships as soon as php-src tags it. The official <code>php</code> images aren't used. One thread-safe (ZTS) build of PHP serves every variant, FrankenPHP included.</p>
+      <p>All of it runs on GitHub Actions, from <a href={repoUrl}>the repository</a>. Each PHP version, OS and architecture gets its own job, on a native amd64 or arm64 runner, which builds every variant for it:</p>
+      <ol>
+        <li>The slow parts (PHP itself, FrankenPHP, grpc and the PIE extensions) come from the GitHub Actions cache when nothing about them has changed. Anything missing is compiled and cached for the next run.</li>
+        <li>The images are assembled and smoke-tested: every listed extension loads, PHP starts without warnings, the web variants serve a page, forwarded headers are only believed from trusted proxies, and the status pages answer.</li>
+        <li>Only images that pass are pushed, with an SBOM and build provenance attached.</li>
+      </ol>
+      <p>A second job joins the amd64 and arm64 images into one multi-arch image, tags it and signs it with keyless cosign. <a href={`${base}usage/#signature`}>Usage</a> shows how to verify the signature.</p>
+      <p>Pull requests build and test PHP {v} on amd64 for both OSes, and publish nothing.</p>
+
+      <h2 id="rebuilds">When images are rebuilt</h2>
+      <p>A check runs every day at 04:17 UTC and decides for each image on its own. An image is rebuilt when:</p>
+      <ul>
+        <li>PHP releases a new patch. It is published under its own tag, such as <code>{v}.13</code>, and the <code>{v}</code> tags move to it.</li>
+        <li>Something it is built from has a new version: the OS base image, nginx, FrankenPHP, s6-overlay or a bundled extension.</li>
+        <li>Its OS packages have a CVE that has a fix available.</li>
+        <li>It was last built more than 30 days ago.</li>
+        <li>This repository changes how the images are built.</li>
+      </ul>
+      <p>Every rebuild also upgrades the OS packages. Images with nothing to change keep their digest, so a quiet tag can go a month without moving.</p>
+      <p>Older patch tags keep being rebuilt the same way. After <code>{v}.13</code> ships, <code>{v}.12</code> still gets OS and extension fixes, built from the same PHP source. Its PHP version never changes. This lasts while its minor version is still built here. Release candidates, such as <code>8.6-rc1</code>, stop once the next one ships.</p>
+      <p>Published images are never deleted, so an old <code>@sha256:</code> digest keeps working after its tag moves on. Each image page lists its builds and what changed in each, and the <a href={`${base}changelog/`}>changelog</a> lists them all.</p>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .about .prose { max-width: 1040px; }
+  .about .prose h2 { margin-top: 56px; }
+  .about .prose h2:first-child { margin-top: 0; }
+  .about .prose ul, .about .prose ol { margin: 12px 0 16px; padding-left: 20px; }
+  .about .prose li { margin: 6px 0; }
+  .about .prose th[scope='row'] { white-space: nowrap; text-align: left; width: 1%; padding-right: 32px; }
+</style>

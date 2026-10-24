@@ -25,6 +25,7 @@ ${lines.join('\n')}
 - [Usage](${url('usage/')}): running, configuring and extending the images, with compose files and Dockerfiles
 - [Matrix](${url('matrix/')}): extensions and versions in every image
 - [Changelog](${url('changelog/')}): changes build by build
+- [About](${url('about/')}): what is built, how it is built and tested, and when images are rebuilt
 - [README](${repoUrl}#readme): every environment variable and configuration option
 
 ## Images
