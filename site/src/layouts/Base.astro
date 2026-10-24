@@ -58,8 +58,14 @@ const nav = [
       <span>Multi-arch PHP images on <code>ghcr.io/mintopia</code>.</span>
       <a href={repoUrl}>Source on GitHub</a>
     </footer>
+    <a class="to-top" href="#content">Back to top</a>
     <p class="sr-only" aria-live="polite" id="copy-status"></p>
     <script>
+      const toTop = document.querySelector<HTMLElement>('.to-top')!;
+      const showToTop = () => toTop.classList.toggle('shown', scrollY > innerHeight * 1.5);
+      addEventListener('scroll', showToTop, { passive: true });
+      showToTop();
+
       document.addEventListener('click', async (e) => {
         const btn = (e.target as Element).closest<HTMLButtonElement>('[data-copy]');
         if (!btn) return;

@@ -158,6 +158,10 @@ td.mono, td .mono { font-size: 0.8125rem; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 0.75rem var(--mono); padding: 2px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--raise); white-space: nowrap; }
 .chip.php { border-color: var(--line); }
 
+.to-top { position: fixed; right: 24px; bottom: 24px; z-index: 10; display: grid; place-items: center; min-height: 44px; padding: 0 16px; font-size: 0.875rem; font-weight: 500; color: var(--ink); text-decoration: none; background: var(--raise); border: 1px solid var(--control); border-radius: 6px; opacity: 0; visibility: hidden; transition: opacity 0.15s, visibility 0.15s; }
+.to-top.shown { opacity: 1; visibility: visible; }
+.to-top:hover { border-color: var(--accent); }
+@media (max-width: 720px) { .to-top { right: 16px; bottom: 16px; } }
 .site-footer { padding: 28px var(--gutter); border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.8125rem; display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
 
 /* image detail, shared by image and build pages */
