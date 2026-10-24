@@ -39,6 +39,13 @@ const route = [
   },
 ] as const;
 
+const skills = [
+  ["Matt Pocock's Skills", 'https://github.com/mattpocock/skills'],
+  ['Impeccable', 'https://impeccable.style/'],
+  ['Ponytail', 'https://github.com/DietrichGebert/ponytail'],
+  ['no-ai-slop', 'https://github.com/petergyang/no-ai-slop'],
+] as const;
+
 const toc = [
   ['what', 'What gets built'],
   ['build', 'How an image is built'],
@@ -127,12 +134,30 @@ const toc = [
         <p class="muted">Each image page lists its builds and what changed in each. The <a href={`${base}changelog/`}>changelog</a> lists them all.</p>
 
         <h2 id="ai">AI disclosure</h2>
-        <!-- TODO: AI disclosure, written by the site owner -->
-        <p class="placeholder">To be written.</p>
+        <div class="credits">
+          <div>
+            <p>Generative AI was used in the creation of this repository.</p>
+            <ul class="credit-list">
+              <li>Claude Opus 5.5</li>
+              <li>Claude Sonnet 5.5</li>
+              <li>ChatGPT Sol 6.1</li>
+            </ul>
+          </div>
+          <div>
+            <p>The following skills were used to help:</p>
+            <ul class="credit-list">
+              {skills.map(([name, url]) => <li><a href={url}>{name}</a><span class="mono muted">{url.replace(/^https:\/\/(github\.com\/)?/, '').replace(/\/$/, '')}</span></li>)}
+            </ul>
+          </div>
+        </div>
 
         <h2 id="creator">About the creator</h2>
-        <!-- TODO: about the creator, written by the site owner -->
-        <p class="placeholder">To be written.</p>
+        <div class="creator">
+          <p class="lead">The project was created by <a href="https://mintopia.net">Jessica Smith</a>. I'm a senior principal engineer for DigiCert, I'm based in the UK and have been using PHP for over 28 years.</p>
+          <p>It was created to replace a few previous repositories that tried to do the same thing for my own personal use - mostly because extensions like GRPC took so long to build and I wanted something quick.</p>
+          <p>When <span class="mono">CVE-2026-109618</span> and <span class="mono">CVE-2026-109619</span> were due to be announced, I knew the official Docker images would take a while to be updated and released and I needed something quicker for some of the services I'm responsible for - so I created this repository.</p>
+          <p>I hope people find it useful and if you have any feedback or suggestions, please <a href={`${repoUrl}/issues`}>raise an issue</a> or reach out to me.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -176,9 +201,19 @@ const toc = [
   .facts.rules dd { font: 400 0.875rem var(--ui); text-align: left; overflow-wrap: normal; }
   .facts.rules dd code { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
 
-  .prose .placeholder { color: var(--muted); }
+
+  .credits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 56px; margin-top: 16px; }
+  .prose .credits p { margin: 0 0 12px; }
+  .credit-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .credit-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-weight: 500; }
+  .credit-list li .mono { font-size: 0.75rem; font-weight: 400; }
+
+  .creator { display: grid; gap: 4px; }
+  .prose .creator .lead { font-size: 1.125rem; margin-top: 16px; }
+  .creator .mono { font-size: 0.9em; }
 
   @media (max-width: 640px) {
+    .credits { grid-template-columns: minmax(0, 1fr); }
     .roster thead { display: none; }
     .roster tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
     .roster tbody th, .roster td { padding: 0; border: 0; }
