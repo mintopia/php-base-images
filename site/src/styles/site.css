@@ -268,7 +268,7 @@ a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY
 .picker:not(:has([aria-current])) a.line-pick .bullet[data-line='8.6'] { --fg: var(--on-amber); }
 
 .docs { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 56px; align-items: start; }
-.toc { position: sticky; top: 24px; font-size: 0.875rem; }
+.toc { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; font-size: 0.875rem; }
 .toc-list { display: grid; gap: 20px; }
 .toc-list > div { display: grid; }
 .toc summary { display: none; }
@@ -289,7 +289,7 @@ a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY
 
 @media (max-width: 900px) {
   .docs { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-  .toc { position: static; }
+  .toc { position: static; max-height: none; overflow: visible; }
   .toc-list { display: flex; flex-wrap: wrap; gap: 12px 32px; }
   .toc a { border-left: 0; padding: 2px 0; }
 }

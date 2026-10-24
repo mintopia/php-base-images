@@ -261,6 +261,10 @@ const toc = [
     ['xdebug', 'Xdebug'],
     ['frankenphp-reload', 'Reloading FrankenPHP workers'],
   ]],
+  ['updates', 'Updates', [
+    ['rebuilds', 'When images are rebuilt'],
+    ['choosing-tag', 'Which tag to use'],
+  ]],
   ['verify', 'Verify', [
     ['signature', 'Verify the signature'],
   ]],
@@ -622,6 +626,40 @@ const toc = [
           <Code lang="compose.yaml" code={reload} />
         </section>
 
+        <h2 id="updates">Updates</h2>
+        <p>Tags move. Pick one by how much change you want to take on without asking.</p>
+
+        <section id="rebuilds">
+          <h3>When images are rebuilt</h3>
+          <p>A check runs every day and rebuilds each image on its own. An image is rebuilt when:</p>
+          <ul>
+            <li>PHP releases a new patch. It is published under its own tag, such as <code>{v}.13</code>, and the <code>{v}</code> tags move to it.</li>
+            <li>Something it is built from has a new version: the OS base image, nginx, FrankenPHP, s6-overlay or a bundled extension.</li>
+            <li>Its OS packages have a CVE that has a fix available.</li>
+            <li>It was last built more than 30 days ago.</li>
+            <li>This repository changes how the images are built.</li>
+          </ul>
+          <p>Every rebuild also upgrades the OS packages. Images with nothing to change keep their digest, so a quiet tag can go a month without moving.</p>
+          <p>Older patch tags keep being rebuilt the same way. After <code>{v}.13</code> ships, <code>{v}.12</code> still gets OS and extension fixes, built from the same PHP source. Its PHP version never changes. This lasts while its minor version is still built here. Release candidates, such as <code>8.6-rc1</code>, stop once the next one ships.</p>
+          <p>Each image page lists its builds and what changed in each, and the <a href="/changelog/">changelog</a> lists them all.</p>
+        </section>
+
+        <section id="choosing-tag">
+          <h3 id="choosing-tag-h">Which tag to use</h3>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tags by how often they move">
+            <table class="tags" aria-labelledby="choosing-tag-h">
+              <thead><tr><th scope="col">Tag</th><th scope="col">Example</th><th scope="col">Moves when</th></tr></thead>
+              <tbody>
+                <tr><td>Minor</td><td><code>{v}-php-fpm</code></td><td>Any rebuild, including new PHP patches. Most people want this one.</td></tr>
+                <tr><td>Patch</td><td><code>{v}.12-php-fpm</code></td><td>Any rebuild, but PHP stays at {v}.12. Move up to the next patch yourself.</td></tr>
+                <tr><td>Digest</td><td><code>{v}-php-fpm@sha256:…</code></td><td>Never. You get the same image every time, fixes included only when you change the digest.</td></tr>
+                <tr><td>Floating</td><td><code>latest</code>, <code>8</code>, <code>unstable</code></td><td>Can jump to a new minor version. Fine for trying things out, not for production.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>For production, pin a digest and let Renovate or Dependabot open a pull request when the tag behind it moves. You get every fix, and each change goes through your own tests first. Image pages show each tag's current digest.</p>
+        </section>
+
         <h2 id="verify">Verify</h2>
         <p>This repository's GitHub Actions workflow signs every image with keyless cosign.</p>
 
@@ -645,6 +683,7 @@ const toc = [
   .usage .prose ul { margin: 12px 0 16px; padding-left: 20px; }
   .usage .prose li { margin: 6px 0; }
   .usage .prose table.env td:first-child { white-space: nowrap; }
+  .usage .prose table.tags code { white-space: nowrap; }
   .usage .prose table.env td:nth-child(2) { white-space: nowrap; color: var(--muted); }
   .usage .prose table.env td:nth-child(2) code { background: none; padding: 0; }
   .shapes td a { color: var(--ink); text-decoration-color: var(--control); text-underline-offset: 3px; }
