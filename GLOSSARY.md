@@ -65,4 +65,4 @@ The files of one slow build step for one PHP tag, OS and arch (`php`, `frankenph
 A run with `--all` that rebuilds every Lane regardless of upstream changes: a push that changes an image input, `force`, or a pull request.
 
 **Trusted proxy**:
-A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0012.
+A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0008.
