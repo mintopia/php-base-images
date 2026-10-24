@@ -30,13 +30,14 @@ check() {
 }
 entry() { jq -cn --arg k "$1" --arg c "$(iso $((now - $2 * day)))" --arg a "$(iso $((now - $3 * day)))" '{key: $k, created_at: $c, last_accessed_at: $a}'; }
 
-keys=$'php=php-k\next-grpc=ext-grpc-k'
+keys=$'prefix=p-\nphp=p-php\next-grpc=p-ext-grpc'
 check "all missing" ' php ext-grpc ' ' ' 0 '[]' <<<"$keys"
-check "all fresh" ' ' ' ' 0 "[$(entry php-k 1 1), $(entry ext-grpc-k 1 1)]" <<<"$keys"
-check "idle 5 days" ' ' ' php ' 0 "[$(entry php-k 10 5), $(entry ext-grpc-k 10 4)]" <<<"$keys"
-check "ext missing restores php" ' ext-grpc ' ' php ' 0 "[$(entry php-k 1 1)]" <<<"$keys"
-check "php over 30 days" ' php ' ' ' 1 "[$(entry php-k 30 1), $(entry ext-grpc-k 1 1)]" <<<"$keys"
-check "prefix is not a match" ' php ' ' ' 0 "[$(entry php-k-other 1 1), $(entry ext-grpc-k 1 1)]" <<<"$keys"
+check "all fresh" ' ' ' ' 0 "[$(entry p-php 1 1), $(entry p-ext-grpc 1 1)]" <<<"$keys"
+check "idle 5 days" ' ' ' php ' 0 "[$(entry p-php 10 5), $(entry p-ext-grpc 10 4)]" <<<"$keys"
+check "ext missing restores php" ' ext-grpc ' ' php ' 0 "[$(entry p-php 1 1)]" <<<"$keys"
+check "php over 30 days rebuilds dependents" ' php ext-grpc ' ' ' 2 "[$(entry p-php 30 1), $(entry p-ext-grpc 1 1)]" <<<"$keys"
+check "php missing rebuilds dependents" ' php ext-grpc ' ' ' 1 "[$(entry p-ext-grpc 1 1)]" <<<"$keys"
+check "prefix is not a match" ' php ext-grpc ' ' ' 1 "[$(entry p-php-other 1 1), $(entry p-ext-grpc 1 1)]" <<<"$keys"
 
 [ "$failed" = 0 ] && echo "product-plan_test: ok"
 exit "$failed"
