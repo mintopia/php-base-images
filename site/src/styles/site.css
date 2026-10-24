@@ -288,7 +288,7 @@ a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY
 .docs-body { min-width: 0; }
 .docs-body :where(h2, h3, h4, section) { scroll-margin-top: 24px; }
 
-.prose h2 { text-transform: none; font-size: 1.75rem; letter-spacing: -0.03em; margin: 88px 0 12px; padding-top: 20px; border-top: 2px solid var(--ink); }
+.prose h2 { text-transform: none; font-size: 1.75rem; letter-spacing: -0.03em; margin: 88px 0 12px; padding-top: 20px; border-top: 2px solid var(--control); }
 .prose > :first-child, .prose > h2:first-child { margin-top: 0; }
 .prose h3 { font-size: 1.25rem; letter-spacing: -0.02em; margin: 48px 0 10px; }
 .prose h4 { font-size: 0.9375rem; margin: 32px 0 8px; }

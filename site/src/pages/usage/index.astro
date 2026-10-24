@@ -291,7 +291,6 @@ const toc = [
     ['frankenphp-reload', 'Reloading FrankenPHP workers'],
   ]],
   ['updates', 'Updates', [
-    ['rebuilds', 'When images are rebuilt'],
     ['choosing-tag', 'Which tag to use'],
   ]],
   ['verify', 'Verify', [
@@ -671,22 +670,7 @@ const toc = [
         </section>
 
         <h2 id="updates">Updates</h2>
-        <p>Tags move. Pick one by how much change you want to take on without asking.</p>
-
-        <section id="rebuilds">
-          <h3>When images are rebuilt</h3>
-          <p>A check runs every day and rebuilds each image on its own. An image is rebuilt when:</p>
-          <ul>
-            <li>PHP releases a new patch. It is published under its own tag, such as <code>{v}.13</code>, and the <code>{v}</code> tags move to it.</li>
-            <li>Something it is built from has a new version: the OS base image, nginx, FrankenPHP, s6-overlay or a bundled extension.</li>
-            <li>Its OS packages have a CVE that has a fix available.</li>
-            <li>It was last built more than 30 days ago.</li>
-            <li>This repository changes how the images are built.</li>
-          </ul>
-          <p>Every rebuild also upgrades the OS packages. Images with nothing to change keep their digest, so a quiet tag can go a month without moving.</p>
-          <p>Older patch tags keep being rebuilt the same way. After <code>{v}.13</code> ships, <code>{v}.12</code> still gets OS and extension fixes, built from the same PHP source. Its PHP version never changes. This lasts while its minor version is still built here. Release candidates, such as <code>8.6-rc1</code>, stop once the next one ships.</p>
-          <p>Each image page lists its builds and what changed in each, and the <a href="/changelog/">changelog</a> lists them all.</p>
-        </section>
+        <p>Tags move. Pick one by how much change you want to take on without asking. <a href={`${import.meta.env.BASE_URL}about/#rebuilds`}>About</a> lists what triggers a rebuild.</p>
 
         <section id="choosing-tag">
           <h3 id="choosing-tag-h">Which tag to use</h3>

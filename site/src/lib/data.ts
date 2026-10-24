@@ -280,6 +280,7 @@ export function extensionVersion(version: string, ext: string) {
   return new Set(byOs.map(([, v]) => v)).size === 1 ? byOs[0][1] : byOs.map(([os, v]) => `${v} ${os}`).join(' · ');
 }
 
+export const siteBuilt = new Date().toISOString();
 export const repoUrl = 'https://github.com/mintopia/php-base-images';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
