@@ -139,8 +139,6 @@ const toc = [
 </Base>
 
 <style>
-  .about .prose > p { max-width: 75ch; }
-
   .roster { width: 100%; }
   .roster tbody th, .roster td { padding: 14px 24px 14px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; text-align: left; font-weight: 400; }
   .line-id { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
@@ -156,7 +154,7 @@ const toc = [
   .job { font: 700 0.8125rem var(--mono); padding: 3px 10px; background: var(--ink); color: var(--bg); border-radius: 5px; }
   .leg-head > span:last-child { font-size: 0.8125rem; color: var(--muted); }
   .leg > ol { list-style: none; margin: 0 0 0 16px; padding: 0; }
-  .stop { position: relative; display: grid; grid-template-columns: 120px minmax(0, 70ch); gap: 4px 24px; padding: 0 0 22px 30px; }
+  .stop { position: relative; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 24px; padding: 0 0 22px 30px; }
   .stop:last-child { padding-bottom: 0; }
   .stop:not(:last-child)::after { content: ''; position: absolute; left: 0; top: 10px; bottom: -10px; width: 2px; background: var(--ink); }
   .stop::before { content: ''; position: absolute; z-index: 1; left: -6px; top: 5px; width: 10px; height: 10px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
@@ -164,7 +162,7 @@ const toc = [
 
   .departure { display: flex; align-items: center; gap: 28px; margin: 20px 0 28px; padding: 22px 28px; background: var(--board); border-radius: 10px; }
   .departure time { font-size: clamp(2.25rem, 5vw, 3.25rem); line-height: 1; font-weight: 500; letter-spacing: -0.03em; }
-  .prose .departure p { margin: 0; color: var(--muted); max-width: 60ch; }
+  .prose .departure p { margin: 0; color: var(--muted); }
   .departure strong { color: var(--ink); }
 
   .triggers { width: 100%; }
@@ -174,7 +172,7 @@ const toc = [
   .triggers td code { color: var(--ink); }
 
   .facts.rules { margin-top: 32px; }
-  .facts.rules > div { display: grid; grid-template-columns: 180px minmax(0, 70ch); justify-content: start; gap: 4px 24px; }
+  .facts.rules > div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 4px 24px; }
   .facts.rules dd { font: 400 0.875rem var(--ui); text-align: left; overflow-wrap: normal; }
   .facts.rules dd code { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
 

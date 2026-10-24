@@ -1,7 +1,7 @@
 ---
 import '../styles/site.css';
 import { Font } from 'astro:assets';
-import { versionKeys, repoUrl } from '../lib/data';
+import { versionKeys, repoUrl, fmtTime, siteBuilt as built } from '../lib/data';
 
 interface Props {
   title: string;
@@ -58,6 +58,7 @@ const nav = [
     <footer class="site-footer">
       <span>Multi-arch PHP images on <code>ghcr.io/mintopia</code>.</span>
       <a href={repoUrl}>Source on GitHub</a>
+      <span>Site built <time class="mono" datetime={built}>{fmtTime(built)} UTC</time></span>
     </footer>
     <a class="to-top" href="#content">Back to top</a>
     <p class="sr-only" aria-live="polite" id="copy-status"></p>
