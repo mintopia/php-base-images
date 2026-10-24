@@ -19,7 +19,7 @@ Superseded builds stay pullable by digest (ADR 0026), and pinned users cannot se
 - A pinned digest shows new CVEs as they are published, without a rebuild.
 - Unfixed lower-severity CVEs, which Debian carries in quantity, do not flag a build.
 - Older PHP patch tags keep their PHP CVEs, since only a newer patch fixes them.
-- Each site build downloads every SBOM, about 3 MB each. That takes about 2.5 minutes for 385 builds, and the time grows with the record count.
+- Each site build downloads every SBOM, 1 MB each on Alpine and 4.5 MB on trixie. That takes about 40 seconds for 72 builds, and the time grows with the record count.
 - PIE extensions and grpc are compiled outside the base image's SBOM, so they are not scanned.
 
 ## Supersedes

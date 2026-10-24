@@ -21,10 +21,10 @@ Only a few steps in a Lane are slow: compiling PHP, building FrankenPHP (Go), bu
 - There is no BuildKit cache import or export anywhere, in the registry or the Actions cache.
 
 ## Consequences
-- A Lane with every product cached takes about 3 to 5 minutes. A cold Lane takes about 30 minutes.
+- A Lane with every product cached takes about 1 to 2 minutes. A cold Lane takes about 10 to 18 minutes, most of it building products.
 - A change to `php-src.Dockerfile`, `build/php-src.sh` or the PHP tag rebuilds every product of the affected legs. A change to an OS Dockerfile rebuilds no product.
-- Products are about 47 MB per Lane, compressed. That is about 1 GB for the 20 current Lanes, plus older patch Lanes built in the last week. The Actions cache limit is 10 GB, and a repository that goes over it pays for more, or entries are evicted and Lanes go cold.
-- GitHub allows 200 new cache entries per minute per repository. A cold start creates about 300 entries across the product builds, so a burst can fail a save, and the next run retries it.
+- Products are 43 to 53 MB per Lane, compressed, and about 33 MB for 8.6. That is about 0.9 GB for the 20 current Lanes, and about 1.7 GB with older patch Lanes built in the last week. The Actions cache limit is 10 GB, and a repository that goes over it pays for more, or entries are evicted and Lanes go cold.
+- GitHub allows 200 new cache entries per minute per repository. A cold start creates about 140 entries, or about 270 with older patch Lanes, across the product builds, so a burst can fail a save, and the next run retries it.
 - Local builds need nothing new.
 
 ## Supersedes

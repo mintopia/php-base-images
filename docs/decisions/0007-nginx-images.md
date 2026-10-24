@@ -14,7 +14,8 @@ The nginx image and the combined php-fpm-nginx image need a current nginx that d
 - The `nginx` Variant is built only in the lane for the lowest stable PHP version in the Matrix (8.2 on a full run). It is not built for patch lanes. Its tags are `<os>` and, on Alpine, `latest` (ADR 0016).
 
 ## Consequences
-- nginx updates do not rebuild PHP images, and PHP updates do not rebuild the nginx image.
+- An nginx update makes the `nginx` image and every `php-fpm-nginx` image stale through `net.mintopia.nginx.version`, so the daily check rebuilds those, including published older patches. `cli`, `php-fpm` and `frankenphp` are not rebuilt.
+- PHP updates do not rebuild the nginx image.
 - The nginx image does not depend on the PHP version, so it has one lane per OS and architecture.
 - `nginx@nginx~<version>` on Alpine pins the nginx minor line.
 
