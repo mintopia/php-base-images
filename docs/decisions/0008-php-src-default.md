@@ -1,6 +1,6 @@
 # Decision: Build PHP from php-src by default
 
-Status: accepted
+Status: superseded by 0023-build-product-cache.md
 Date: 2026-10-21
 
 ## Context
