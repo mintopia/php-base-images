@@ -34,23 +34,27 @@ RUN printf 'Package: php*\nPin: release *\nPin-Priority: -1\n' > /etc/apt/prefer
 
 # hadolint ignore=DL3006
 FROM os-${OS} AS php-base
-ARG PHP_TAG
 ENV PHP_INI_DIR=/usr/local/etc/php \
     PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
     PHP_CPPFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" \
-    PHP_LDFLAGS="-Wl,-O1 -pie" \
-    PHP_VERSION=${PHP_TAG#php-}
+    PHP_LDFLAGS="-Wl,-O1 -pie"
 RUN mkdir -p "$PHP_INI_DIR/conf.d" /var/www/html \
     && chown www-data:www-data /var/www/html \
     && chmod 1777 /var/www/html
 COPY build/docker-php/docker-php-* /usr/local/bin/
-COPY --from=src /php.tar.xz /usr/src/php.tar.xz
+
+# tag and source come after the builder deps so a PHP patch bump reuses them
+FROM php-base AS php-tagged
+ARG PHP_TAG
+ENV PHP_VERSION=${PHP_TAG#php-}
+COPY --link --from=src /php.tar.xz /usr/src/php.tar.xz
 
 FROM php-base AS builder-alpine
 # hadolint ignore=DL3018,SC2086
 RUN apk add --no-cache $PHPIZE_DEPS coreutils linux-headers \
         argon2-dev curl-dev gnu-libiconv-dev libsodium-dev libxml2-dev oniguruma-dev openssl-dev readline-dev sqlite-dev \
         freetype-dev libjpeg-turbo-dev libpng-dev libwebp-dev libpq-dev unixodbc-dev net-snmp-dev \
+        icu-dev libzip-dev gmp-dev \
     && rm -f /usr/include/iconv.h
 
 FROM php-base AS builder-trixie
@@ -59,19 +63,25 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
         libargon2-dev libcurl4-openssl-dev libonig-dev libreadline-dev libsodium-dev libsqlite3-dev libssl-dev libxml2-dev zlib1g-dev \
         libfreetype-dev libjpeg62-turbo-dev libpng-dev libwebp-dev libpq-dev unixodbc-dev libsnmp-dev \
+        libicu-dev libzip-dev libgmp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # hadolint ignore=DL3006
 FROM builder-${OS} AS build-zts
+ARG PHP_TAG
+ENV PHP_VERSION=${PHP_TAG#php-}
+COPY --link --from=src /php.tar.xz /usr/src/php.tar.xz
 RUN --mount=type=bind,source=build/php-src.sh,target=/php-src.sh \
     /php-src.sh
 
-# one build serves zts and fpm; keep FPM out of the zts image
-FROM build-zts AS zts-files
-RUN rm -rf /usr/local/sbin/php-fpm /usr/local/etc/php-fpm* /usr/local/php/fpm /usr/local/php/man/man8/php-fpm.8 \
-        "$PHP_INI_DIR/conf.d/docker-fpm.ini"
+# one build serves zts, fpm and frankenphp; libphp.so (embed) only ships in frankenphp
+FROM build-zts AS fpm-files
+RUN rm -rf /usr/local/lib/libphp.so /usr/local/php/man
 
-FROM php-base AS zts
+FROM fpm-files AS zts-files
+RUN rm -rf /usr/local/sbin/php-fpm /usr/local/etc/php-fpm* /usr/local/php/fpm "$PHP_INI_DIR/conf.d/docker-fpm.ini"
+
+FROM php-tagged AS zts
 COPY --from=zts-files /usr/local/ /usr/local/
 # hadolint ignore=DL3008,DL3018
 RUN --mount=type=bind,from=build-zts,source=/runtime-deps,target=/tmp/runtime-deps \
@@ -80,8 +90,8 @@ RUN --mount=type=bind,from=build-zts,source=/runtime-deps,target=/tmp/runtime-de
     && php --version
 CMD ["php", "-a"]
 
-FROM php-base AS fpm
-COPY --from=build-zts /usr/local/ /usr/local/
+FROM php-tagged AS fpm
+COPY --from=fpm-files /usr/local/ /usr/local/
 # hadolint ignore=DL3008,DL3018
 RUN --mount=type=bind,from=build-zts,source=/runtime-deps,target=/tmp/runtime-deps \
     if command -v apk >/dev/null; then xargs apk add --no-cache < /tmp/runtime-deps; \
@@ -129,6 +139,7 @@ RUN --mount=type=bind,source=build/frankenphp-src.sh,target=/frankenphp-src.sh \
     /frankenphp-src.sh
 
 FROM zts AS frankenphp
+COPY --from=build-zts /usr/local/lib/libphp.so /usr/local/lib/
 COPY --from=build-frankenphp /usr/local/lib/libwatcher*.so* /usr/local/lib/
 COPY --from=build-frankenphp /usr/local/bin/frankenphp /usr/local/bin/
 # hadolint ignore=DL3008,DL3018
