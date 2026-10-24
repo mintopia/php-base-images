@@ -155,6 +155,33 @@ RUN apt-get update \\
     && pie install xdebug/xdebug \\
     && apt-get purge -y --auto-remove $PHPIZE_DEPS unzip \\
     && rm -rf /var/lib/apt/lists/*`;
+const xcaddyBuild = (from, deps) => `FROM ${from} AS caddy
+COPY --from=golang:1 /usr/local/go /usr/local/go
+COPY --from=caddy:builder /usr/bin/xcaddy /usr/local/bin/xcaddy
+COPY --from=dunglas/frankenphp:builder /usr/local/include/wtr /usr/local/include/wtr
+RUN ${deps} \\
+    && v=$(frankenphp build-info | awk '$2 == "github.com/dunglas/frankenphp" { print $3 }') \\
+    && PATH="/usr/local/go/bin:$PATH" \\
+    CGO_ENABLED=1 \\
+    CGO_CFLAGS="$(php-config --includes)" \\
+    CGO_LDFLAGS="$(php-config --ldflags)" \\
+    XCADDY_GO_BUILD_FLAGS="-ldflags='-w -s' -tags=nobadger,nomysql,nopgx" \\
+    xcaddy build --output /frankenphp \\
+        --with github.com/dunglas/frankenphp@$v \\
+        --with github.com/dunglas/frankenphp/caddy@$v \\
+        --with github.com/dunglas/caddy-cbrotli \\
+        --with github.com/dunglas/mercure/caddy \\
+        --with github.com/caddy-dns/cloudflare
+
+FROM ${from}
+COPY --from=caddy /frankenphp /usr/local/bin/frankenphp`;
+const xcaddyAlpine = xcaddyBuild(`${php}:${v}-frankenphp`, 'apk add --no-cache $PHPIZE_DEPS brotli-dev');
+const xcaddyTrixie = xcaddyBuild(`${php}:${v}-trixie-frankenphp`, `apt-get update \\
+    && apt-get install -y --no-install-recommends $PHPIZE_DEPS libbrotli-dev`);
+const cloudflare = `environment:
+  SERVER_NAME: app.example.com
+  CADDY_GLOBAL_OPTIONS: acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+  CLOUDFLARE_API_TOKEN: \${CLOUDFLARE_API_TOKEN}`;
 const status = `environment:
   PHP_FPM_STATUS_PATH: /fpm-status
   PHP_FPM_PING_PATH: /fpm-ping
@@ -255,6 +282,7 @@ const toc = [
     ['extensions', 'Extensions'],
     ['pie', 'PIE extensions'],
     ['composer', 'Composer'],
+    ['caddy-modules', 'Caddy modules'],
   ]],
   ['develop', 'Develop', [
     ['dev-mode', 'Development mode'],
@@ -592,6 +620,21 @@ const toc = [
           <p>The build stage uses the <code>cli</code> image of the same PHP version and OS. It has the same extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones.</p>
           <Code lang="Dockerfile" code={composerBuild} />
           <p class="muted">On trixie, also install <code>unzip</code> in the build stage. Composer needs it to unpack packages.</p>
+        </section>
+
+        <section id="caddy-modules">
+          <h3>Caddy modules</h3>
+          <p>To add Caddy modules to FrankenPHP, rebuild its binary with <code>xcaddy</code> in a build stage on top of the image, then copy it into the final image. Building on the image links against its own PHP. This adds the Cloudflare DNS module, so Caddy can get certificates with the ACME DNS challenge, including wildcards and hosts not reachable from the internet.</p>
+          <div class="os-switch">
+            <div class="seg small" role="radiogroup" aria-label="OS">
+              <label><input type="radio" name="caddy-os" value="alpine" checked />alpine</label>
+              <label><input type="radio" name="caddy-os" value="trixie" />trixie</label>
+            </div>
+            <div class="alpine"><Code lang="Dockerfile" code={xcaddyAlpine} /></div>
+            <div class="trixie"><Code lang="Dockerfile" code={xcaddyTrixie} /></div>
+          </div>
+          <p>The build matches the FrankenPHP version already in the image and keeps its brotli and Mercure modules. Add more modules with extra <code>--with</code> lines. Turn the module on with <code>CADDY_GLOBAL_OPTIONS</code>, with a Cloudflare API token that can edit DNS for the zone:</p>
+          <Code lang="compose.yaml" code={cloudflare} />
         </section>
 
         <h2 id="develop">Develop</h2>
