@@ -102,6 +102,7 @@ code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 40px;
   padding: 0 16px;
@@ -118,6 +119,10 @@ code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-line); }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn svg { width: 16px; height: 16px; }
+.btn .label { display: inline-block; }
+.btn .done-icon, .btn[data-copied] .copy-icon { display: none; }
+.btn[data-copied] .done-icon { display: block; stroke-dasharray: 16; animation: tick 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes tick { from { stroke-dashoffset: 16; } }
 
 main { flex: 1; }
 .page { padding: 48px var(--gutter) 96px; }
@@ -322,7 +327,7 @@ main:focus { outline: none; }
   .toc-list { padding-top: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; scroll-behavior: auto !important; }
   a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: none; }
 }
 @media (pointer: coarse) {

@@ -71,19 +71,35 @@ const nav = [
       document.addEventListener('click', async (e) => {
         const btn = (e.target as Element).closest<HTMLButtonElement>('[data-copy]');
         if (!btn) return;
+        if (btn.hasAttribute('data-copied') || btn.hasAttribute('data-failed')) return;
         const status = document.getElementById('copy-status')!;
+        const label = btn.querySelector<HTMLElement>('.label')!;
+        const was = label.textContent;
+        // label turns over like a board flap; width held so the button doesn't jump
+        const show = (text: string) => {
+          label.textContent = text;
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) label.animate(
+            [{ transform: 'perspective(200px) rotateX(-90deg)', opacity: 0.3 }, { transform: 'none', opacity: 1 }],
+            { duration: 180, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          );
+        };
+        let state = 'copied';
         try {
           await navigator.clipboard.writeText(btn.dataset.copy!);
+          status.textContent = 'Copied';
         } catch {
+          state = 'failed';
           status.textContent = 'Copy failed. Select the text and copy it manually.';
-          return;
         }
-        if (btn.hasAttribute('data-copied')) return;
-        const label = btn.querySelector('.label')!;
-        const was = label.textContent;
-        label.textContent = status.textContent = 'Copied';
-        btn.dataset.copied = '';
-        setTimeout(() => { delete btn.dataset.copied; label.textContent = was; status.textContent = ''; }, 1400);
+        btn.style.minWidth = `${btn.offsetWidth}px`;
+        btn.setAttribute(`data-${state}`, '');
+        show(state === 'copied' ? 'Copied' : 'Copy failed');
+        setTimeout(() => {
+          btn.removeAttribute(`data-${state}`);
+          btn.style.minWidth = '';
+          status.textContent = '';
+          show(was!);
+        }, state === 'copied' ? 1400 : 2400);
       });
     </script>
   </body>
