@@ -1,6 +1,6 @@
 name: lanes
 
-# one PHP version's builds and merges; build.yml calls this once per versions.json key
+# one PHP version's build products, builds and merges; build.yml calls this once per versions.json key
 on:
   workflow_call:
     inputs:
@@ -8,6 +8,9 @@ on:
         type: string
         required: true
       merges:
+        type: string
+        required: true
+      products:
         type: string
         required: true
     secrets:
@@ -18,13 +21,140 @@ permissions:
   contents: read
 
 env:
-  # per-arch images and BuildKit cache; only finished multi-arch images go to php/nginx
+  # per-arch images; only finished multi-arch images go to php/nginx
   CACHE_IMAGE: ghcr.io/mintopia/php-base-images-cache
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
+  # keeps every lane's build products in the Actions cache (ADR 0023); only main saves, so pull requests read main's
+  products:
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.products != '[]' }}
+    name: products ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(inputs.products) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Bake variables
+        env:
+          VARS: ${{ toJSON(matrix.vars) }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/product-keys.sh | tee keys >> "$GITHUB_OUTPUT"
+          scripts/product-plan.sh < keys | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' php ')
+        with:
+          path: products/php
+          key: ${{ steps.plan.outputs.php }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' frankenphp ')
+        with:
+          path: products/frankenphp
+          key: ${{ steps.plan.outputs.frankenphp }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-grpc ')
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.plan.outputs.ext-grpc }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-redis ')
+        with:
+          path: products/ext-redis
+          key: ${{ steps.plan.outputs.ext-redis }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-apcu ')
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.plan.outputs.ext-apcu }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-mongodb ')
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.plan.outputs.ext-mongodb }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-opentelemetry ')
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.plan.outputs.ext-opentelemetry }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-protobuf ')
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.plan.outputs.ext-protobuf }}
+      - name: Build
+        env:
+          BUILD: ${{ steps.plan.outputs.build }}
+        run: |
+          read -ra build <<<"$BUILD"
+          [ ${#build[@]} -gt 0 ] || exit 0
+          PRODUCTS=$(find products -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null || true)
+          export PRODUCTS
+          jq -n '{target: ($ARGS.positional | map({key: "product-\(.)", value: {output: ["type=local,dest=products/\(.)"]}}) | from_entries)}' \
+            --args "${build[@]}" > outputs.json
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json "${build[@]/#/product-}"
+          du -sh "${build[@]/#/products/}"
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' php ')
+        with:
+          path: products/php
+          key: ${{ steps.plan.outputs.php }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' frankenphp ')
+        with:
+          path: products/frankenphp
+          key: ${{ steps.plan.outputs.frankenphp }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-grpc ')
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.plan.outputs.ext-grpc }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-redis ')
+        with:
+          path: products/ext-redis
+          key: ${{ steps.plan.outputs.ext-redis }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-apcu ')
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.plan.outputs.ext-apcu }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-mongodb ')
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.plan.outputs.ext-mongodb }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-opentelemetry ')
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.plan.outputs.ext-opentelemetry }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-protobuf ')
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.plan.outputs.ext-protobuf }}
+
   build:
+    needs: products
+    if: ${{ !cancelled() && inputs.lanes != '[]' }}
     name: build ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 90
@@ -58,6 +188,51 @@ jobs:
         env:
           VARS: ${{ toJSON(matrix.vars) }}
         run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - id: keys
+        run: scripts/product-keys.sh | tee -a "$GITHUB_OUTPUT"
+      # a product missing from the cache is built inline
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.php != ''
+        with:
+          path: products/php
+          key: ${{ steps.keys.outputs.php }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.frankenphp != ''
+        with:
+          path: products/frankenphp
+          key: ${{ steps.keys.outputs.frankenphp }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-grpc != ''
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.keys.outputs.ext-grpc }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-redis != ''
+        with:
+          path: products/ext-redis
+          key: ${{ steps.keys.outputs.ext-redis }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-apcu != ''
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.keys.outputs.ext-apcu }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-mongodb != ''
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.keys.outputs.ext-mongodb }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-opentelemetry != ''
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.keys.outputs.ext-opentelemetry }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-protobuf != ''
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.keys.outputs.ext-protobuf }}
+      - name: Restored products
+        run: echo "PRODUCTS=$(find products -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null || true)" | tee -a "$GITHUB_ENV"
       # loaded without attestations: the docker exporter can't load an index
       - name: Build
         run: |
@@ -65,7 +240,7 @@ jobs:
           jq -n --arg prefix "php:$PHP_VERSION-$OS-" \
             '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: ["type=docker,name=\($prefix)\(.)"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
-          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json --set '*.cache-to=' "${targets[@]}"
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json "${targets[@]}"
       - name: Smoke test
         run: |
           for t in $TARGETS; do
