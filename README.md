@@ -44,9 +44,9 @@ tests/smoke.sh php:8.5-alpine-cli cli
 ## CI
 
 - A push to `main` rebuilds and publishes every lane when it changes an image input (Dockerfiles, `docker-bake.hcl`, `versions.json`, `build/`, `rootfs/`, `scripts/tags.sh`). Other pushes run the daily upstream check. The site deploys at the end of every build run. To rebuild after a workflow-only change, run `build` with `force`.
-- A daily job rebuilds only the images whose upstream inputs have changed or whose OS packages have CVEs with a fix available. The rest of the lane keeps its published digest. It compares the current PHP, OS, nginx, FrankenPHP, s6-overlay and extension versions against the labels on the published images, and Trivy scans the published SBOM for CVEs. Every CI build upgrades OS packages, so a rebuild ships the fix.
-- A monthly job rebuilds everything, as does `workflow_dispatch` with `force`.
-- Older patch releases are still maintained. Once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily and monthly rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
+- A daily job rebuilds only the images whose upstream inputs have changed, whose OS packages have CVEs with a fix available, or that were built over 30 days ago. The rest of the lane keeps its published digest. It compares the current PHP, OS, nginx, FrankenPHP, s6-overlay and extension versions against the labels on the published images, and Trivy scans the published SBOM for CVEs. Every CI build upgrades OS packages, so a rebuild ships the fix.
+- `workflow_dispatch` with `force` rebuilds everything.
+- Older patch releases are still maintained. Once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
 - Each PHP version builds and merges in its own call of `.github/workflows/lanes.yml`, so one version publishes without waiting for the others.
 - Each site build lists every recorded build's CVEs and flags the critical ones. OS package CVEs come from a Trivy scan of the build's SBOM, and PHP CVEs from php-src's security advisories.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.

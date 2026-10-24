@@ -141,7 +141,7 @@ frankenphp_src=''
 plan() {
 	local key=$1 lane=$2 php_source=$3 php_tag=$4; shift 4
 	local patch=false version tag exts stable src_vars fp sha os targets frankenphp zts fpm vars image minor grpc nginx base
-	local stale rebuild t ref reasons published exp arch diff cves
+	local stale rebuild t ref reasons published exp arch diff cves built
 	[ "$lane" = "$key" ] || patch=true
 	plan_lanes='[]' plan_merges='[]'
 	version=$(jq -c --arg k "$key" '.[$k]' <<<"$matrix")
@@ -206,6 +206,10 @@ plan() {
 								'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
 							[ -z "$diff" ] || reasons+=("$arch($diff)")
 						done
+						if [ ${#reasons[@]} -eq 0 ]; then
+							built=$(jq -r '[.[].created | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601] | min' <<<"$published")
+							[ "$built" -gt "$(($(date +%s) - 30 * 86400))" ] || reasons+=("built $(jq -rn --argjson t "$built" '$t | todate'), over 30 days")
+						fi
 						if [ ${#reasons[@]} -eq 0 ]; then
 							cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
 							[ -z "$cves" ] || reasons+=("fixable CVEs $cves")

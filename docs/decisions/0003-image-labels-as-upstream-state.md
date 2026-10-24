@@ -7,7 +7,7 @@ Date: 2026-10-21
 A daily job must rebuild a lane only when PHP, the OS base, nginx, FrankenPHP, s6-overlay or an extension changed upstream. That needs a record of what each published image was built from. Options: a state file committed back to the repo, an external store, or the image itself.
 
 ## Decision
-Every image carries OCI labels recording its inputs (base image digest, nginx version, s6-overlay version, extension versions). The daily check reads them with `docker buildx imagetools inspect`, compares to current upstream, and dispatches builds only for lanes that differ. Monthly cron and manual dispatch pass `force=true` to bypass the comparison.
+Every image carries OCI labels recording its inputs (base image digest, nginx version, s6-overlay version, extension versions). The daily check reads them with `docker buildx imagetools inspect`, compares to current upstream, and dispatches builds only for lanes that differ. Manual dispatch passes `force=true` to bypass the comparison. (The monthly cron is superseded by ADR 0021.)
 
 ## Consequences
 - No state outside GHCR; deleting an image simply makes its lane rebuild.
