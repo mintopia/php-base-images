@@ -291,6 +291,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
     strategy:
@@ -383,17 +384,30 @@ jobs:
           package=php
           [ "$VARIANT" != nginx ] || package=nginx
           versions=/users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions
+          # versions are listed newest first; this run's pushes are no older than its start
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -q .run_started_at) \
+            || started=$(date -u -d '-6 hours' +%FT%TZ)
           for arch in amd64 arm64; do
             digest=$(cat "digests/digests-$VERSION-$OS-$arch/$VARIANT")
-            id=''
-            # a new push takes a moment to be listed; newest versions come first
-            for i in 1 2 3 4 5; do
-              for page in 1 2 3 4 5; do
-                id=$(gh api "$versions?per_page=100&page=$page" -q ".[] | select(.name == \"$digest\") | .id")
-                [ -z "$id" ] || break 2
-              done
-              sleep $((i * 10))
+            match() { jq -r --arg d "$digest" '.[] | select(.name == $d and (.metadata.container.tags | length) == 0) | .id' <<<"$1"; }
+            id='' list=''
+            # a new push takes a moment to be listed, so page 1 is retried
+            for _ in 1 2 3; do
+              list=$(gh api "$versions?per_page=100&page=1") || { list=''; break; }
+              id=$(match "$list")
+              [ -z "$id" ] || break
+              sleep 5
             done
-            [ -n "$id" ] || { echo "::warning::$package@$digest not found, left in place"; continue; }
-            gh api -X DELETE "$versions/$id"
+            page=1
+            while [ -z "$id" ] && [ -n "$list" ] \
+              && jq -e --arg s "$started" 'length == 100 and .[-1].created_at >= $s' <<<"$list" > /dev/null; do
+              page=$((page + 1))
+              list=$(gh api "$versions?per_page=100&page=$page") || list=''
+              id=$(match "$list")
+            done
+            if [ -z "$id" ]; then
+              echo "::warning::$package@$digest not found, left in place"
+            else
+              gh api -X DELETE "$versions/$id" > /dev/null || echo "::warning::could not delete $package@$digest ($id)"
+            fi
           done
