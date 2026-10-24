@@ -1,79 +1,6 @@
 # syntax=docker/dockerfile:1
-ARG PHP_VERSION=8.5
-ARG FRANKENPHP_VERSION=1
-ARG INSTALLER_VERSION=2.12.3
-
-FROM mlocati/php-extension-installer:${INSTALLER_VERSION} AS installer-upstream
-
-FROM --platform=$BUILDPLATFORM alpine:3 AS installer
-COPY --from=installer-upstream /usr/bin/install-php-extensions /usr/bin/
-# shortcut: installer rejects unreleased PHP minors; drop once it lists 8.6
-RUN sed -i 's/| 805)/| 805 | 806)/' /usr/bin/install-php-extensions \
-    && grep -q '| 806)' /usr/bin/install-php-extensions
-FROM ghcr.io/php/pie:bin AS pie
-
-FROM php:${PHP_VERSION}-zts-trixie AS php-zts
-
-# one stage per extension so a version bump rebuilds only that extension, and they build in parallel
-FROM php-zts AS ext-base
-RUN --mount=type=bind,source=build,target=/build \
-    /build/extensions.sh deps
-
-FROM ext-base AS ext-bundled
-ARG EXTENSIONS
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
-    /build/extensions.sh bundled
-
-FROM ext-base AS ext-grpc
-ARG EXTENSIONS
-ARG GRPC_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    /build/extensions.sh grpc
-
-FROM ext-base AS ext-redis
-ARG EXTENSIONS
-ARG REDIS_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh pie redis "phpredis/phpredis:$REDIS_VERSION"
-
-FROM ext-base AS ext-apcu
-ARG EXTENSIONS
-ARG APCU_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh pie apcu "apcu/apcu:$APCU_VERSION"
-
-FROM ext-base AS ext-mongodb
-ARG EXTENSIONS
-ARG MONGODB_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh pie mongodb "mongodb/mongodb-extension:$MONGODB_VERSION"
-
-FROM ext-base AS ext-opentelemetry
-ARG EXTENSIONS
-ARG OPENTELEMETRY_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh pie opentelemetry "open-telemetry/ext-opentelemetry:$OPENTELEMETRY_VERSION"
-
-FROM ext-base AS ext-protobuf
-ARG EXTENSIONS
-ARG PROTOBUF_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh pie protobuf "pie-extensions/protobuf:$PROTOBUF_VERSION"
-
-FROM scratch AS ext
-COPY --link --from=ext-bundled /out/ /
-COPY --link --from=ext-grpc /out/ /
-COPY --link --from=ext-redis /out/ /
-COPY --link --from=ext-apcu /out/ /
-COPY --link --from=ext-mongodb /out/ /
-COPY --link --from=ext-opentelemetry /out/ /
-COPY --link --from=ext-protobuf /out/ /
+# zts, fpm, zts-frankenphp and ext are bake contexts on php-src.Dockerfile targets
+# hadolint global ignore=DL3022
 
 FROM --platform=$BUILDPLATFORM alpine:3 AS s6
 ARG S6_OVERLAY_VERSION
@@ -88,10 +15,9 @@ RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1
         && tar -C /s6 -Jxpf "s6-overlay-$f.tar.xz" || exit 1; \
     done
 
-FROM php:${PHP_VERSION}-zts-trixie AS cli
+# hadolint ignore=DL3006
+FROM zts AS cli
 ARG PKG_STAMP
-COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --link --from=pie /pie /usr/local/bin/pie
 COPY --link --from=ext /files/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
@@ -120,10 +46,9 @@ WORKDIR /app
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "-a"]
 
-FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-trixie AS frankenphp
+# hadolint ignore=DL3006
+FROM zts-frankenphp AS frankenphp
 ARG PKG_STAMP
-COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --link --from=pie /pie /usr/local/bin/pie
 COPY --link --from=ext /files/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
@@ -158,10 +83,9 @@ EXPOSE 8080
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
-FROM php:${PHP_VERSION}-fpm-trixie AS php-fpm
+# hadolint ignore=DL3006
+FROM fpm AS php-fpm
 ARG PKG_STAMP
-COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --link --from=pie /pie /usr/local/bin/pie
 COPY --link --from=ext /files/ /
 # hadolint ignore=DL3008,SC2086
 RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
