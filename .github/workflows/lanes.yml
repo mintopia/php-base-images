@@ -58,20 +58,14 @@ jobs:
         env:
           VARS: ${{ toJSON(matrix.vars) }}
         run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
-      # one build: loaded locally for the smoke test and, when publishing, pushed by digest to the cache package
+      # loaded without attestations: the docker exporter can't load an index
       - name: Build
         run: |
           read -ra targets <<<"$TARGETS"
-          push=
-          args=(--set '*.cache-to=')
-          if [ "$PUBLISH" = true ]; then
-            push="type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true"
-            args=(--provenance=mode=max --sbom=true --metadata-file meta.json)
-          fi
-          jq -n --arg push "$push" --arg prefix "php:$PHP_VERSION-$OS-" \
-            '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: (["type=docker,name=\($prefix)\(.)"] + if $push == "" then [] else [$push] end)}}) | from_entries)}' \
+          jq -n --arg prefix "php:$PHP_VERSION-$OS-" \
+            '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: ["type=docker,name=\($prefix)\(.)"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
-          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json "${args[@]}" "${targets[@]}"
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json --set '*.cache-to=' "${targets[@]}"
       - name: Smoke test
         run: |
           for t in $TARGETS; do
@@ -88,6 +82,16 @@ jobs:
           for t in $TARGETS; do
             [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
           done
+      # same builder, so every layer is cached; only attestations and the push are new
+      - name: Push by digest
+        if: env.PUBLISH == 'true'
+        run: |
+          read -ra targets <<<"$TARGETS"
+          jq -n --arg push "type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true" \
+            '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: [$push]}}) | from_entries)}' \
+            --args "${targets[@]}" > outputs.json
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json \
+            --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
       - name: Record digests
         if: env.PUBLISH == 'true'
         run: |
