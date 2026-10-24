@@ -21,8 +21,6 @@ permissions:
   contents: read
 
 env:
-  # per-arch images; only finished multi-arch images go to php/nginx
-  CACHE_IMAGE: ghcr.io/mintopia/php-base-images-cache
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -258,12 +256,13 @@ jobs:
             [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
           done
       # same builder, so every layer is cached; only attestations and the push are new
+      # untagged per-arch indexes go straight into php/nginx; merge deletes them once it has made the multi-arch index
       - name: Push by digest
         if: env.PUBLISH == 'true'
         run: |
           read -ra targets <<<"$TARGETS"
-          jq -n --arg push "type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true" \
-            '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: [$push]}}) | from_entries)}' \
+          jq -n '{target: ($ARGS.positional | map({key: ., value: {tags: [],
+              output: ["type=image,name=ghcr.io/mintopia/\(if . == "nginx" then "nginx" else "php" end),push-by-digest=true,name-canonical=true,push=true"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
           docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json \
             --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
@@ -271,8 +270,10 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           for t in $TARGETS; do
+            image=ghcr.io/mintopia/php
+            [ "$t" != nginx ] || image=ghcr.io/mintopia/nginx
             d=$(jq -re --arg t "$t" '.[$t]["containerimage.digest"]' meta.json)
-            docker buildx imagetools inspect "$CACHE_IMAGE@$d" > /dev/null
+            docker buildx imagetools inspect "$image@$d" > /dev/null
             echo "$d" > "digests/$t"
           done
       - uses: actions/upload-artifact@v7
@@ -294,7 +295,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      # cross-package copies make many registry requests; GHCR allows 2000/minute across every PHP version's merges
+      # GHCR allows 2000 requests a minute across every PHP version's merges
       max-parallel: 2
       matrix:
         include: ${{ fromJSON(inputs.merges) }}
@@ -327,7 +328,7 @@ jobs:
           php=""
           for arch in amd64 arm64; do
             dir="digests/digests-$VERSION-$OS-$arch"
-            refs+=("$CACHE_IMAGE@$(cat "$dir/$VARIANT")")
+            refs+=("$image@$(cat "$dir/$VARIANT")")
             v=$(cat "$dir/php-version")
             [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
             php=$v
@@ -370,3 +371,29 @@ jobs:
           path: record/
           if-no-files-found: error
           retention-days: 1
+      # shortcut: deleted only here, so a failed or abandoned run leaves its per-arch indexes untagged in php/nginx
+      # only the per-arch index: its platform image and attestations are now children of the multi-arch index
+      - name: Delete per-arch indexes
+        env:
+          VERSION: ${{ matrix.version }}
+          OS: ${{ matrix.os }}
+          VARIANT: ${{ matrix.variant }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          package=php
+          [ "$VARIANT" != nginx ] || package=nginx
+          versions=/users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions
+          for arch in amd64 arm64; do
+            digest=$(cat "digests/digests-$VERSION-$OS-$arch/$VARIANT")
+            id=''
+            # a new push takes a moment to be listed; newest versions come first
+            for i in 1 2 3 4 5; do
+              for page in 1 2 3 4 5; do
+                id=$(gh api "$versions?per_page=100&page=$page" -q ".[] | select(.name == \"$digest\") | .id")
+                [ -z "$id" ] || break 2
+              done
+              sleep $((i * 10))
+            done
+            [ -n "$id" ] || { echo "::warning::$package@$digest not found, left in place"; continue; }
+            gh api -X DELETE "$versions/$id"
+          done

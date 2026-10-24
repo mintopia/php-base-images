@@ -26,7 +26,7 @@ A matrix of images (PHP 8.2 to 8.6 RC × alpine/trixie × cli/php-fpm/php-fpm-ng
 
 - Tags follow `<version>-<os>-<variant>` with default components (version → latest stable, os → alpine, variant → cli); `latest` and `unstable` are aliases. Logic lives in `scripts/tags.sh`.
 - `versions.json` (the Matrix file) is the source of truth for versions, stability, OS list, extensions, and extensions dropped from 8.6 with reasons.
-- CI (`.github/workflows/build.yml`) builds per Lane (version, OS, arch), pushes by digest to the cache package, and the `merge` job publishes multi-arch manifests.
+- CI (`.github/workflows/build.yml`) builds per Lane (version, OS, arch), pushes untagged per-arch images by digest to `php` or `nginx`, and the `merge` job publishes multi-arch manifests from them.
 - Published images are never deleted; superseded digests stay pullable. A rebuild in place still moves tags without a tagged trace, so history is recorded at build time.
 - Visitors copy references into Dockerfiles; digest pinning (`@sha256:…`) is a real workflow.
 
