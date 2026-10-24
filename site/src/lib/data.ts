@@ -249,22 +249,25 @@ export interface Day {
   commits: Commit[];
 }
 
+// the registry was reset by the rebuild started at this time; earlier records and commits stay off the changelog
+const CHANGELOG_SINCE = Date.parse('2026-10-24T17:43:00Z');
+
 // one entry per day; identical changes across images collapse into one line
 export const changelog: Day[] = (() => {
   const days = new Map<string, Day>();
   const day = (date: string) => days.get(date) ?? days.set(date, { date, changes: [], commits: [] }).get(date)!;
   for (const img of pages) {
     for (const b of img.builds) {
+      if (Date.parse(b.time) < CHANGELOG_SINCE) continue;
       const d = day(b.time.slice(0, 10));
       for (const c of b.changes) {
-        if (c.kind === 'first') continue;
         const hit = d.changes.find((x) => x.text === c.text);
         if (hit) hit.images.push(img.id);
         else d.changes.push({ ...c, images: [img.id] });
       }
     }
   }
-  for (const c of commits) day(c.time.slice(0, 10)).commits.push(c);
+  for (const c of commits.filter((c) => Date.parse(c.time) >= CHANGELOG_SINCE)) day(c.time.slice(0, 10)).commits.push(c);
   return [...days.values()].filter((d) => d.changes.length || d.commits.length).sort((a, b) => b.date.localeCompare(a.date));
 })();
 
