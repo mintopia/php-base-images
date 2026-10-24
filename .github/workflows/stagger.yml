@@ -1,0 +1,60 @@
+# shortcut: temporary, spreads rebuild dates after the 2026-10 registry reset; delete after 2026-11-22
+name: stagger
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: Run this day number (1-28) instead of today's
+        type: string
+        default: ""
+
+permissions:
+  actions: write
+
+env:
+  START: "2026-10-24"
+  # day, php_version, os; one group a day so build.yml runs never queue behind each other
+  GROUP_TABLE: |
+    1 8.2 alpine
+    4 8.2 trixie
+    6 8.3 alpine
+    9 8.3 trixie
+    12 8.4 alpine
+    14 8.4 trixie
+    17 8.5 alpine
+    20 8.5 trixie
+    23 8.6 alpine
+    26 8.6 trixie
+
+jobs:
+  stagger:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_DAY: ${{ inputs.day }}
+    steps:
+      - name: Rebuild today's groups
+        run: |
+          set -euo pipefail
+          day=${INPUT_DAY:-$(( ($(date -u +%s) - $(date -u -d "$START" +%s)) / 86400 ))}
+          echo "day $day"
+          if [ "$day" -ge 29 ]; then
+            gh workflow disable stagger.yml
+            exit 0
+          fi
+          while read -r d php os; do
+            [ "$d" = "$day" ] || continue
+            echo "group $php $os"
+            # keys: <php tag minus "php-">-<os>-<arch>-<product>-<hash>, so patch tags match too
+            keys=$(gh api --paginate "repos/$GH_REPO/actions/caches?key=$php.&per_page=100" --jq '.actions_caches[].key' \
+              | grep -E "^${php//./\\.}\.[^ ]*-$os-(amd64|arm64)-" | sort -u || true)
+            for key in $keys; do
+              echo "delete $key"
+              gh cache delete "$key"
+            done
+            gh workflow run build.yml --ref "$GITHUB_REF_NAME" -f force=true -f php_version="$php" -f os="$os"
+          done <<<"$GROUP_TABLE"
