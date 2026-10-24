@@ -1,6 +1,6 @@
 ---
 import Bullet from './Bullet.astro';
-import { images, versions, versionKeys, latestStable, VARIANTS, OSES, imagePath, type Image } from '../lib/data';
+import { images, versions, versionKeys, latestStable, VARIANTS, OSES, imagePath, imageName, type Image } from '../lib/data';
 
 // without an image, nothing is selected and every option links from the defaults
 interface Props { img?: Image }
@@ -14,6 +14,14 @@ const href = (v: string, os: string, variant: string) => {
   return hit && imagePath(hit);
 };
 const on = (yes: boolean) => (img && yes ? 'page' : undefined);
+
+const OS_NAME: Record<string, string> = { alpine: 'Alpine', trixie: 'Debian trixie' };
+const VARIANT_DOES: Record<string, string> = {
+  cli: 'CLI runs commands, queue workers and scripts.',
+  'php-fpm': 'PHP-FPM runs PHP alone, on port 9000, behind a separate web server.',
+  'php-fpm-nginx': 'PHP-FPM with nginx serves HTTP on port 8080 from one container.',
+  frankenphp: 'FrankenPHP runs Caddy and PHP in one process, serving HTTP on port 8080.',
+};
 ---
 <nav class="board picker" aria-label="Choose an image">
   <div class="field">
@@ -25,14 +33,14 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
   </div>
   {!nginx && (
     <div class="field">
-      <span class="legend">PHP</span>
+      <span class="legend">PHP version</span>
       <div class="lines">
         {versionKeys.map((k) => {
           const h = href(k, os, variant);
           const title = versions[k].stable ? `PHP ${k}` : `PHP ${k} release candidate`;
           return h
             ? <a class="line-pick" href={h} title={title} aria-current={on(k === v)}><Bullet version={k} /></a>
-            : <span class="line-pick off" title={`${title}: no ${variant} image`}><Bullet version={k} /></span>;
+            : <span class="line-pick off" title={`${title}: no ${variant} image`}><Bullet version={k} /><span class="sr-only">: no {variant} image</span></span>;
         })}
       </div>
     </div>
@@ -42,7 +50,8 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
     <div class="seg">
       {OSES.map((o) => {
         const h = href(v, o, nginx ? 'nginx' : variant);
-        return h ? <a href={h} aria-current={on(o === os)}>{o}</a> : <span aria-disabled="true">{o}</span>;
+        const why = nginx ? `No nginx ${o} image` : `No PHP ${v} ${variant} image on ${o}`;
+        return h ? <a href={h} aria-current={on(o === os)}>{o}</a> : <span aria-disabled="true" title={why}>{o}<span class="sr-only">: {why}</span></span>;
       })}
     </div>
   </div>
@@ -52,9 +61,25 @@ const on = (yes: boolean) => (img && yes ? 'page' : undefined);
       <div class="seg">
         {VARIANTS.map((t) => {
           const h = href(v, os, t);
-          return h ? <a href={h} aria-current={on(t === variant)}>{t}</a> : <span aria-disabled="true" title={`No PHP ${v} ${t} image`}>{t}</span>;
+          const why = `No PHP ${v} ${t} image`;
+          return h ? <a href={h} aria-current={on(t === variant)}>{t}</a> : <span aria-disabled="true" title={why}>{t}<span class="sr-only">: {why}</span></span>;
         })}
       </div>
     </div>
   )}
+  <div class="picker-readout">
+    {img ? (
+      <>
+        <div class="tag-line">
+          <span class="readout-label">Tag</span>
+          <code>{imageName(img)}</code>
+        </div>
+        {nginx
+          ? <p>nginx on {OS_NAME[os]}. It passes PHP requests to a php-fpm host.</p>
+          : <p>PHP {img.version} on {OS_NAME[os]}. {VARIANT_DOES[variant]}</p>}
+      </>
+    ) : (
+      <p>Pick a PHP version, OS and variant, or nginx. Anything you leave out takes its default: PHP {latestStable}, Alpine and CLI, the tag <code>latest</code>.</p>
+    )}
+  </div>
 </nav>

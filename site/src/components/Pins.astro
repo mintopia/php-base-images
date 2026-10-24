@@ -1,0 +1,19 @@
+---
+import Copy from './Copy.astro';
+import { type Image, type Build, pinRef } from '../lib/data';
+
+interface Props { img: Image; b: Build }
+const { img, b } = Astro.props;
+const live = !b.live && img.current ? pinRef(img, img.current) : null;
+---
+<div class="pins">
+  {live && <Copy text={live} label="Copy live reference" primary />}
+  <Copy text={pinRef(img, b)} label={live ? 'Copy this superseded build' : 'Copy pinned reference'} primary={!live} />
+</div>
+
+<style>
+  .pins { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+  /* beat the global `.dest .btn { margin-left: auto }` */
+  .pins :global(.btn.btn) { margin-left: 0; }
+  @media (max-width: 960px) { .pins { margin-left: 0; } }
+</style>

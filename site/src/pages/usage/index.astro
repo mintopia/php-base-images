@@ -6,6 +6,9 @@ import { latestStable, readmeTable } from '../../lib/data';
 const v = latestStable;
 const php = 'ghcr.io/mintopia/php';
 const proxyRanges = await readmeTable('| In front of the container |');
+const verify = `cosign verify ${php}:${v} \\
+  --certificate-identity-regexp '^https://github\\.com/mintopia/php-base-images/\\.github/workflows/' \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com`;
 
 const one = `services:
   app:
@@ -56,17 +59,82 @@ const hardened = `services:
     read_only: true
     tmpfs:
       - "/run:exec"
-      - "/tmp"
+      # uploads and sessions land here, so size caps them
+      - "/tmp:size=256m"
     cap_drop:
       - ALL
     cap_add:
       - SETUID
       - SETGID
     environment:
-      PUID: 1000`;
-const extend = `FROM ${php}:${v}-php-fpm
-RUN install-php-extensions xsl
+      PUID: 1000
+    volumes:
+      - "./:/app:ro"
+      # the only places the app writes, owned by UID 1000 on the host
+      - "./storage:/app/storage"
+      - "./bootstrap/cache:/app/bootstrap/cache"`;
+const hardenedSplit = `x-hardened: &hardened
+  read_only: true
+  cap_drop:
+    - ALL
+  cap_add:
+    - SETUID
+    - SETGID
+
+services:
+  web:
+    <<: *hardened
+    image: ghcr.io/mintopia/nginx:alpine
+    tmpfs:
+      - "/run"
+    environment:
+      PUID: 1000
+      PHP_FPM_HOST: php
+    volumes:
+      - "./public:/app/public:ro"
+  php:
+    <<: *hardened
+    image: ${php}:${v}-php-fpm
+    tmpfs:
+      - "/run"
+      - "/tmp"
+    environment:
+      PUID: 1000
+    volumes:
+      - "./:/app"`;
+const hardenedFranken = `services:
+  app:
+    image: ${php}:${v}-frankenphp
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    tmpfs:
+      - "/config"
+      - "/tmp"
+    environment:
+      PUID: 1000
+    volumes:
+      - "./:/app"
+      # certificates from automatic HTTPS; a tmpfs loses them on restart
+      - "caddy-data:/data"
+
+volumes:
+  caddy-data:`;
+const hardenedCli = `docker run --rm --read-only --tmpfs /tmp \\
+  --cap-drop ALL --cap-add SETUID --cap-add SETGID \\
+  -e PUID=1000 -v "$PWD:/app" \\
+  ${php}:${v} php artisan schedule:run`;
+const extensionsDockerfile = `FROM ${php}:${v}-php-fpm
+RUN install-php-extensions xsl`;
+const hookDockerfile = `FROM ${php}:${v}-php-fpm
 COPY --chmod=755 migrate.sh /docker-entrypoint.d/50-migrate`;
+const hookScript = `#!/bin/sh
+set -e
+run-as php /app/artisan migrate --force
+exec "$@"`;
 const composerBuild = `FROM ${php}:${v}-cli AS vendor
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /app
@@ -110,12 +178,62 @@ RUN apt-get update \\
 const xdebugIni = `xdebug.mode=debug
 xdebug.client_host=host.docker.internal
 xdebug.start_with_request=trigger`;
+const iniOverride = `; /usr/local/etc/php/conf.d/50-app.ini
+realpath_cache_size = 4096K`;
 const reload = `environment:
   FRANKENPHP_CONFIG: |
     worker {
       file ./public/index.php
       watch ./**/*.php
     }`;
+
+// [variable, default, what it does]. Defaults come from the image ENV and rootfs, not the README.
+const common = [
+  ['APP_ROOT', '<code>/app</code>', 'The app root and the container\'s working directory. The entrypoint changes into it when it exists.'],
+  ['APP_PUBLIC_PATH', '<code>$APP_ROOT/public</code>', 'The directory served over HTTP. nginx and FrankenPHP serve files from it.'],
+  ['PUID', 'unset, so root', 'User ID the processes run as. See <a href="#hardened">Non-root and read-only</a>.'],
+  ['PGID', 'same as <code>PUID</code>', 'Group ID the processes run as. Only used when <code>PUID</code> is set.'],
+];
+const php_ = [
+  ['PHP_INI_MODE', '<code>production</code>', '<code>development</code> loads <code>php.ini-development</code>, which shows errors. Any other value stops the container.'],
+  ['PHP_MEMORY_LIMIT', '<code>256M</code>', '<code>memory_limit</code>.'],
+  ['PHP_UPLOAD_MAX_FILESIZE', '<code>32M</code>', '<code>upload_max_filesize</code>.'],
+  ['PHP_POST_MAX_SIZE', '<code>32M</code>', '<code>post_max_size</code>. The nginx images also use it as the largest request body they accept.'],
+  ['PHP_MAX_EXECUTION_TIME', '<code>30</code>', '<code>max_execution_time</code>, in seconds.'],
+  ['PHP_OPCACHE_VALIDATE_TIMESTAMPS', '<code>1</code>', 'Checks files for changes, so edits show up. Set <code>0</code> in production for speed. Code changes then need a restart.'],
+  ['PHP_SESSION_COOKIE_HTTPONLY', 'empty, which is off', '<code>session.cookie_httponly</code>.'],
+  ['PHP_SESSION_USE_STRICT_MODE', '<code>0</code>', '<code>session.use_strict_mode</code>.'],
+  ['PHP_SESSION_COOKIE_SAMESITE', 'empty', '<code>session.cookie_samesite</code>. Empty sends no <code>SameSite</code> attribute.'],
+];
+const fpm = [
+  ['PHP_FPM_PM', '<code>dynamic</code>', 'Process manager: <code>static</code>, <code>dynamic</code> or <code>ondemand</code>.'],
+  ['PHP_FPM_MAX_CHILDREN', '<code>10</code>', 'Most worker processes at once.'],
+  ['PHP_FPM_START_SERVERS', '<code>2</code>', 'Workers started with the pool.'],
+  ['PHP_FPM_MIN_SPARE_SERVERS', '<code>1</code>', 'Idle workers kept ready.'],
+  ['PHP_FPM_MAX_SPARE_SERVERS', '<code>3</code>', 'Most idle workers kept around.'],
+  ['PHP_FPM_MAX_REQUESTS', '<code>500</code>', 'Requests a worker serves before it restarts. <code>0</code> never restarts it. Use <code>1</code> in development.'],
+  ['PHP_FPM_REQUEST_TERMINATE_TIMEOUT', '<code>60</code>', 'Seconds before php-fpm stops a slow request.'],
+  ['PHP_FPM_STATUS_PATH', 'unset, which is off', 'Path of the php-fpm status page. In the nginx images, nginx serves it. See <a href="#status">Status pages</a>.'],
+  ['PHP_FPM_PING_PATH', 'unset, which is off', 'Path of the ping page, which answers <code>pong</code>. Same serving rules as the status page.'],
+];
+const nginx_ = [
+  ['PHP_FPM_HOST', '<code>php-fpm</code> in <code>nginx</code>, <code>127.0.0.1</code> in <code>php-fpm-nginx</code>', 'Host nginx sends PHP to. Looked up again every 10 seconds, so a restarted php-fpm container is found. Lookups use the nameservers in <code>/etc/resolv.conf</code>, which ignore search domains, so use a full name on Kubernetes.'],
+  ['PHP_FPM_PORT', '<code>9000</code>', 'Port php-fpm listens on.'],
+  ['PHP_POST_MAX_SIZE', '<code>32M</code>', 'nginx\'s <code>client_max_body_size</code>. Also <code>post_max_size</code> in PHP.'],
+  ['NGINX_STATUS_PATH', 'unset, which is off', 'Path of nginx\'s <code>stub_status</code> page.'],
+  ['PHP_FPM_STATUS_ALLOW', '<code>127.0.0.1 ::1</code>', 'Space-separated addresses or CIDR ranges that can reach the status and ping paths. Everyone else gets 403.'],
+];
+const franken_ = [
+  ['SERVER_NAME', '<code>:8080</code>', 'Address Caddy serves. Set a hostname and Caddy gets and renews its certificate. Port 80 and 443 must reach the container for that.'],
+  ['FRANKENPHP_CONFIG', 'unset', 'Goes inside the <code>frankenphp</code> block, for example <code>worker ./public/index.php</code>.'],
+  ['CADDY_GLOBAL_OPTIONS', 'unset', 'Goes inside the global options block.'],
+  ['CADDY_EXTRA_CONFIG', 'unset', 'Top-level Caddyfile config, outside any site block.'],
+  ['CADDY_SERVER_EXTRA_DIRECTIVES', 'unset', 'Directives in the site block, before PHP is served.'],
+];
+const proxy = [
+  ['TRUSTED_PROXIES', 'unset, which trusts nothing', 'Space-separated CIDR ranges of the proxies or load balancers in front of the container. See <a href="#proxies">Behind a proxy</a>.'],
+  ['CLIENT_IP_HEADER', '<code>X-Forwarded-For</code>', 'Header a trusted proxy puts the client address in.'],
+];
 
 const toc = [
   ['run', 'Run', [
@@ -125,24 +243,34 @@ const toc = [
     ['cli-setup', 'Commands and workers'],
   ]],
   ['configure', 'Configure', [
+    ['how-settings', 'How settings reach PHP'],
+    ['settings', 'Settings by image'],
     ['proxies', 'Behind a proxy'],
-    ['hardened', 'Non-root, read-only'],
+    ['hardened', 'Non-root and read-only'],
     ['status', 'Status pages'],
     ['logs', 'Logs'],
   ]],
   ['extend', 'Extend', [
-    ['extending', 'Extensions and start-up hooks'],
-    ['composer', 'Composer'],
+    ['hooks', 'Start-up hooks'],
+    ['extensions', 'Extensions'],
     ['pie', 'PIE extensions'],
+    ['composer', 'Composer'],
   ]],
   ['develop', 'Develop', [
     ['dev-mode', 'Development mode'],
     ['xdebug', 'Xdebug'],
     ['frankenphp-reload', 'Reloading FrankenPHP workers'],
   ]],
+  ['updates', 'Updates', [
+    ['rebuilds', 'When images are rebuilt'],
+    ['choosing-tag', 'Which tag to use'],
+  ]],
+  ['verify', 'Verify', [
+    ['signature', 'Verify the signature'],
+  ]],
 ] as const;
 ---
-<Base title="Usage · mintopia/php" description="How to run, configure and extend the images, with compose files and Dockerfiles." current="usage">
+<Base title="Usage · mintopia/php" description="How to run, configure and extend the images, with compose files, every environment variable and Dockerfiles." current="usage">
   <div class="page usage lined" data-line={v}>
     <header class="page-head">
       <h1>Usage</h1>
@@ -151,20 +279,28 @@ const toc = [
 
     <div class="docs">
       <nav class="toc" aria-label="On this page">
-        {toc.map(([id, label, items]) => (
-          <div>
-            <a class="toc-head" href={`#${id}`}>{label}</a>
-            {items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+        <details open>
+          <summary>On this page</summary>
+          <script is:inline>
+            { const d = document.currentScript.parentElement, m = matchMedia('(max-width: 719.98px)'), f = () => { d.open = !m.matches; }; f(); m.addEventListener('change', f); }
+          </script>
+          <div class="toc-list">
+            {toc.map(([id, label, items]) => (
+              <div>
+                <a class="toc-head" href={`#${id}`}>{label}</a>
+                {items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
       </nav>
 
       <div class="docs-body prose">
         <h2 id="run">Run</h2>
-        <p>Pick the Variant that matches how your app takes requests.</p>
-        <div class="table-wrap">
-          <table class="shapes">
-            <thead><tr><th>You need</th><th>Variant</th></tr></thead>
+        <p>Pick the variant that matches how your app takes requests.</p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Which variant to use">
+          <table class="shapes" aria-labelledby="run">
+            <thead><tr><th scope="col">You need</th><th scope="col">Variant</th></tr></thead>
             <tbody>
               <tr><td><a href="#one-container">One container serving a PHP app over HTTP</a></td><td><code>php-fpm-nginx</code> or <code>frankenphp</code></td></tr>
               <tr><td><a href="#two-containers">Web server and PHP scaled separately</a></td><td><code>nginx</code> + <code>php-fpm</code></td></tr>
@@ -194,7 +330,7 @@ const toc = [
 
         <section id="two-containers">
           <h3>nginx and php-fpm, separately</h3>
-          <p>The <code>nginx</code> image finds php-fpm by name through <code>PHP_FPM_HOST</code>, resolving it again every 10 seconds so php-fpm can restart or scale. nginx needs only the public files; php-fpm needs the whole app.</p>
+          <p>The <code>nginx</code> image finds php-fpm by name through <code>PHP_FPM_HOST</code>, looking it up again every 10 seconds so php-fpm can restart or scale. nginx needs only the public files; php-fpm needs the whole app.</p>
           <figure class="route" aria-label="Browser to nginx container, then FastCGI to a separate php-fpm container">
             <div class="stop ext">Browser</div>
             <div class="hop"><span>HTTP</span></div>
@@ -213,7 +349,7 @@ const toc = [
 
         <section id="frankenphp-setup">
           <h3>FrankenPHP</h3>
-          <p>Caddy and PHP in one process. Worker mode keeps the app booted between requests. Set <code>SERVER_NAME</code> to a hostname and Caddy fetches certificates itself.</p>
+          <p>Caddy and PHP in one process. Worker mode keeps the app booted between requests. Set <code>SERVER_NAME</code> to a hostname and Caddy gets its certificate itself.</p>
           <figure class="route" aria-label="Browser to FrankenPHP, which runs Caddy and PHP in one process">
             <div class="stop ext">Browser</div>
             <div class="hop"><span>HTTP or HTTPS</span></div>
@@ -233,11 +369,75 @@ const toc = [
         </section>
 
         <h2 id="configure">Configure</h2>
-        <p>Settings are environment variables read when the container starts. These are the ones most setups change; the <a href="https://github.com/mintopia/php-base-images#configuration">README</a> lists every one.</p>
+        <p>Settings are environment variables. The container reads them when it starts, so set them in your compose file or <code>docker run</code> command, then restart the container.</p>
+
+        <section id="how-settings">
+          <h3>How settings reach PHP</h3>
+          <p>The PHP settings in the tables below are written to <code>/usr/local/etc/php/conf.d/zz-env.ini</code> at start-up, from the environment variables. For anything else, add your own <code>.ini</code> file to the same directory, copied in your Dockerfile or mounted.</p>
+          <p>PHP reads the files in that directory in name order, and <code>zz-env.ini</code> is read last. If a setting is in both, the environment variable wins. Use the variables where they exist.</p>
+          <Code lang="ini" code={iniOverride} />
+          <p class="muted">With <code>PHP_INI_MODE=development</code>, PHP starts from <code>php.ini-development</code> instead of <code>php.ini-production</code>. Your <code>.ini</code> files still apply.</p>
+        </section>
+
+        <section id="settings">
+          <h3>Settings by image</h3>
+          <p>Each image reads only some of the settings. This table shows which tables to read for each variant.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Settings tables by variant">
+            <table aria-labelledby="settings">
+              <thead><tr><th scope="col">Variant</th><th scope="col">Listens on</th><th scope="col">Read these tables</th></tr></thead>
+              <tbody>
+                <tr><td><code>cli</code></td><td>nothing</td><td><a href="#paths-users">Paths and users</a>, <a href="#php">PHP</a></td></tr>
+                <tr><td><code>php-fpm</code></td><td>9000</td><td><a href="#paths-users">Paths and users</a>, <a href="#php">PHP</a>, <a href="#php-fpm-settings">php-fpm</a></td></tr>
+                <tr><td><code>php-fpm-nginx</code></td><td>8080, and 9000 inside the container</td><td><a href="#paths-users">Paths and users</a>, <a href="#php">PHP</a>, <a href="#php-fpm-settings">php-fpm</a>, <a href="#nginx-settings">nginx</a>, <a href="#proxy-settings">Client IP and proxies</a></td></tr>
+                <tr><td><code>nginx</code></td><td>8080</td><td><a href="#paths-users">Paths and users</a>, <a href="#nginx-settings">nginx</a>, <a href="#proxy-settings">Client IP and proxies</a></td></tr>
+                <tr><td><code>frankenphp</code></td><td>8080</td><td><a href="#paths-users">Paths and users</a>, <a href="#php">PHP</a>, <a href="#frankenphp-settings">FrankenPHP</a>, <a href="#proxy-settings">Client IP and proxies</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4 id="paths-users">Paths and users</h4>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Paths and users variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{common.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+
+          <h4 id="php">PHP</h4>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="PHP variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{php_.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+
+          <h4 id="php-fpm-settings">php-fpm</h4>
+          <p class="muted">These set the pool in <code>www.conf</code>. In the <code>php-fpm-nginx</code> image, nginx also publishes the status and ping paths.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="php-fpm variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{fpm.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+
+          <h4 id="nginx-settings">nginx</h4>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="nginx variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{nginx_.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+
+          <h4 id="frankenphp-settings">FrankenPHP</h4>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="FrankenPHP variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{franken_.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+          <p class="muted">FrankenPHP also imports any <code>*.caddyfile</code> in <code>/etc/frankenphp/Caddyfile.d/</code>.</p>
+
+          <h4 id="proxy-settings">Client IP and proxies</h4>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Proxy variables"><table class="env">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+            <tbody>{proxy.map(([n, d, w]) => <tr><td class="mono">{n}</td><td set:html={d} /><td set:html={w} /></tr>)}</tbody>
+          </table></div>
+          <p class="muted"><code>NGINX_REAL_IP_FROM</code> and <code>NGINX_REAL_IP_HEADER</code> still work as older names for these two.</p>
+        </section>
 
         <section id="proxies">
-          <h3>Behind a proxy</h3>
-          <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Your framework can trust every proxy safely. Switch the setting to see what PHP receives.</p>
+          <h3 id="proxy-h">Behind a proxy</h3>
+          <p>nginx and FrankenPHP accept <code>X-Forwarded-*</code> headers only from addresses in <code>TRUSTED_PROXIES</code>, then hand PHP the real client address and scheme. Untrusted headers never reach PHP, so your framework can trust every proxy. Switch the setting to see what PHP receives.</p>
           <div class="demo">
             <div class="seg" role="radiogroup" aria-label="TRUSTED_PROXIES">
               <label><input type="radio" name="trust" value="yes" checked />Trusted: <code>172.16.0.0/12</code></label>
@@ -257,9 +457,9 @@ const toc = [
                 </div>
               </div>
             </figure>
-            <div class="table-wrap">
-              <table class="server">
-                <thead><tr><th>$_SERVER</th><th>PHP sees</th></tr></thead>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Proxy $_SERVER values">
+              <table class="server" aria-labelledby="proxy-h">
+                <thead><tr><th scope="col">$_SERVER</th><th scope="col">PHP sees</th></tr></thead>
                 <tbody>
                   <tr><td class="mono">REMOTE_ADDR</td><td class="mono"><span class="yes">203.0.113.7</span><span class="no">172.18.0.2</span></td></tr>
                   <tr><td class="mono">HTTPS</td><td class="mono"><span class="yes">on</span><span class="no">(empty)</span></td></tr>
@@ -272,72 +472,109 @@ const toc = [
           </div>
           <Code lang="compose.yaml" code={proxied} />
           <h4>What to trust</h4>
-          <div class="ranges"><Fragment set:html={proxyRanges} /></div>
+          <div class="ranges table-wrap" tabindex="0" role="region" aria-label="Trusted proxy ranges"><Fragment set:html={proxyRanges} /></div>
           <p class="muted">With several proxies in a chain, list every hop's range. Never trust <code>0.0.0.0/0</code> in production.</p>
         </section>
 
         <section id="hardened">
-          <h3>Non-root, read-only</h3>
-          <p>Every image runs with a read-only root filesystem and no capabilities, given a tmpfs where the variant writes. <code>PUID</code> and <code>PGID</code> run processes as that user; php-fpm's master stays root and only its workers switch. Switching user needs <code>SETUID</code> and <code>SETGID</code> added back.</p>
-          <Code lang="compose.yaml" code={hardened} />
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Variant</th><th>Writable tmpfs</th></tr></thead>
+          <h3 id="hardened-h">Non-root and read-only</h3>
+          <p><code>PUID</code> sets the user ID the container's processes run as, and <code>PGID</code> sets the group. Without <code>PUID</code>, everything runs as root.</p>
+          <ul>
+            <li>The IDs are numbers. No user is added to <code>/etc/passwd</code>, so this works on a read-only root filesystem.</li>
+            <li>The entrypoint doesn't change the owner of anything. Mounted files must already be readable, and writable where the app writes, by that ID.</li>
+            <li>php-fpm's master process stays root and runs its workers as <code>PUID</code>. nginx and FrankenPHP run entirely as <code>PUID</code>.</li>
+            <li>Start-up hooks run as root, before the switch. See <a href="#hooks">Start-up hooks</a>.</li>
+            <li>Dropping all capabilities also drops <code>SETUID</code> and <code>SETGID</code>, which the switch needs. Add them back, as below.</li>
+          </ul>
+          <p>The images also work with a read-only root filesystem and no capabilities, as long as each path the variant writes to is a tmpfs.</p>
+          <p>A tmpfs is an in-memory directory that starts empty on every start, so use one for scratch space. Anything that has to survive a restart, such as uploaded files or certificates, needs a volume instead. Bind mounts and volumes stay writable under <code>read_only</code>, so the app's code can be mounted <code>:ro</code> and only the directories it writes to left writable.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Writable tmpfs by variant">
+            <table aria-labelledby="hardened-h">
+              <thead><tr><th scope="col">Variant</th><th scope="col">Writable tmpfs</th></tr></thead>
               <tbody>
                 <tr><td><code>cli</code></td><td>none, or <code>/tmp</code> if the app writes temp files</td></tr>
                 <tr><td><code>php-fpm</code></td><td><code>/run</code>, and <code>/tmp</code> for sessions and uploads</td></tr>
                 <tr><td><code>nginx</code></td><td><code>/run</code></td></tr>
                 <tr><td><code>php-fpm-nginx</code></td><td><code>/run:exec</code> for s6-overlay, and <code>/tmp</code></td></tr>
-                <tr><td><code>frankenphp</code></td><td><code>/data</code>, <code>/config</code>, <code>/tmp</code></td></tr>
+                <tr><td><code>frankenphp</code></td><td><code>/config</code>, <code>/tmp</code>, and <code>/data</code> as a tmpfs or a volume</td></tr>
               </tbody>
             </table>
           </div>
-          <p class="muted">nginx renders its config into <code>/run/nginx</code>; extra <code>*.conf</code> files mounted in <code>/etc/nginx/conf.d/</code> are still included. With FrankenPHP's automatic HTTPS, use a volume for <code>/data</code> so certificates survive restarts.</p>
+          <h4>php-fpm-nginx</h4>
+          <Code lang="compose.yaml" code={hardened} />
+          <h4>php-fpm and nginx in separate containers</h4>
+          <Code lang="compose.yaml" code={hardenedSplit} />
+          <h4>FrankenPHP</h4>
+          <Code lang="compose.yaml" code={hardenedFranken} />
+          <h4>CLI</h4>
+          <Code lang="sh" code={hardenedCli} />
+          <p class="muted">nginx renders its config into <code>/run/nginx</code>. Extra <code>*.conf</code> files mounted in <code>/etc/nginx/conf.d/</code> are still included. With FrankenPHP's automatic HTTPS, use a volume for <code>/data</code> so certificates survive restarts.</p>
         </section>
 
         <section id="status">
           <h3>Status pages</h3>
-          <p>Off by default. Setting a path turns that page on, reachable only from addresses in <code>PHP_FPM_STATUS_ALLOW</code>.</p>
+          <p>Off until you set a path. How the page is reached depends on the variant.</p>
+          <ul>
+            <li><strong>php-fpm-nginx and nginx:</strong> nginx serves each path over HTTP, but only to addresses in <code>PHP_FPM_STATUS_ALLOW</code>. Everyone else gets 403.</li>
+            <li><strong>php-fpm:</strong> there is no web server, so php-fpm answers only over FastCGI, on port 9000. <code>PHP_FPM_STATUS_ALLOW</code> does nothing here. Keep port 9000 off public networks.</li>
+          </ul>
+          <p>With separate containers, set the same <code>PHP_FPM_STATUS_PATH</code> and <code>PHP_FPM_PING_PATH</code> on both the php-fpm and nginx containers.</p>
           <Code lang="compose.yaml" code={status} />
         </section>
 
         <section id="logs">
-          <h3>Logs</h3>
-          <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing is written to files in the container.</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Variant</th><th>stdout</th><th>stderr</th></tr></thead>
+          <h3 id="logs-h">Logs</h3>
+          <p>Everything goes to stdout and stderr, so <code>docker logs</code> shows it all. Nothing writes log files inside the container.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Log output by variant">
+            <table aria-labelledby="logs-h">
+              <thead><tr><th scope="col">Variant</th><th scope="col">stdout</th><th scope="col">stderr</th></tr></thead>
               <tbody>
                 <tr><td><code>cli</code></td><td>the script's output</td><td>PHP errors and warnings</td></tr>
-                <tr><td><code>php-fpm</code></td><td>nothing</td><td>php-fpm's log, an access line per request, and PHP errors</td></tr>
+                <tr><td><code>php-fpm</code></td><td>nothing</td><td>php-fpm's request log, its own log and PHP errors</td></tr>
                 <tr><td><code>php-fpm-nginx</code></td><td>nginx's access log</td><td>nginx's error log, php-fpm's log and PHP errors</td></tr>
                 <tr><td><code>nginx</code></td><td>nginx's access log</td><td>nginx's error log</td></tr>
                 <tr><td><code>frankenphp</code></td><td>nothing</td><td>Caddy and FrankenPHP's JSON log, PHP errors included</td></tr>
               </tbody>
             </table>
           </div>
-          <p class="muted">php-fpm prefixes PHP errors with <code>NOTICE: PHP message:</code> and cuts lines at 8192 bytes. FrankenPHP has no access log unless you set <code>CADDY_SERVER_EXTRA_DIRECTIVES=log</code>.</p>
+          <p class="muted">php-fpm prefixes PHP errors with <code>NOTICE: PHP message:</code> and cuts lines at 8192 bytes. The standalone <code>php-fpm</code> image logs each request with the client IP nginx passes on. In <code>php-fpm-nginx</code> only nginx logs requests. FrankenPHP has no access log unless you set <code>CADDY_SERVER_EXTRA_DIRECTIVES=log</code>.</p>
         </section>
 
         <h2 id="extend">Extend</h2>
-        <p>Build your own image on top: add extensions, start-up hooks and Composer dependencies in a Dockerfile.</p>
+        <p>Build your own image on top of one of these to add extensions, start-up hooks and Composer dependencies.</p>
 
-        <section id="extending">
-          <h3>Extensions and start-up hooks</h3>
-          <p><code>install-php-extensions</code> and <code>pie</code> are in every image. Executables in <code>/docker-entrypoint.d/</code> run in filename order at start, as root, before the command.</p>
-          <Code lang="Dockerfile" code={extend} />
+        <section id="hooks">
+          <h3>Start-up hooks</h3>
+          <p>A start-up hook is a script that runs every time the container starts, before PHP, nginx or FrankenPHP does. Put executable files in <code>/docker-entrypoint.d/</code> and the entrypoint runs them in order. Use hooks for work that has to happen at start: running migrations, warming a cache, or creating directories on a mounted volume.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="How start-up hooks run">
+            <table class="steps">
+              <thead><tr><th scope="col">Question</th><th scope="col">Answer</th></tr></thead>
+              <tbody>
+                <tr><td>When</td><td>Every time a container starts, including one-off commands run with <code>docker run</code>.</td></tr>
+                <tr><td>Order</td><td>Filename order. Start names with numbers, such as <code>10-cache</code> and <code>50-migrate</code>.</td></tr>
+                <tr><td>As which user</td><td>root. <code>PUID</code> applies after the last hook.</td></tr>
+                <tr><td>What they see</td><td>The config is already written: nginx config, the PHP <code>.ini</code> files and the environment.</td></tr>
+                <tr><td>Which images</td><td>All of them: <code>cli</code>, <code>php-fpm</code>, <code>php-fpm-nginx</code>, <code>nginx</code> and <code>frankenphp</code>.</td></tr>
+                <tr><td>Rules</td><td>Executable, no spaces in the filename, and the last line must be <code>exec "$@"</code>. A hook that fails stops the container. A hook that skips <code>exec "$@"</code> stops the command from running.</td></tr>
+                <tr><td>Child images</td><td>Each image can add its own. A file with the same name replaces the one from the image below.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>This hook runs migrations. It uses <code>run-as</code>, which runs a command as <code>PUID</code> when it is set and as root otherwise, so the migration writes files as the app's user.</p>
+          <Code lang="Dockerfile" code={hookDockerfile} />
+          <Code lang="sh" code={hookScript} />
+          <p class="muted">Hooks run every time, so this migration also runs when you start the image for a one-off command. With several replicas, each one runs the hook at the same moment. Keep hooks safe to run more than once, or run migrations as a separate job.</p>
         </section>
 
-        <section id="composer">
-          <h3>Composer</h3>
-          <p>Composer isn't in the images. Run it in a build stage on the <code>cli</code> image: it has the same PHP and extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones. Only the app and its <code>vendor/</code> reach the final stage.</p>
-          <Code lang="Dockerfile" code={composerBuild} />
-          <p class="muted">On trixie, also install <code>unzip</code> in the build stage; Composer needs it to unpack packages.</p>
+        <section id="extensions">
+          <h3>Extensions</h3>
+          <p>Every image has <code>install-php-extensions</code>, which installs and enables PHP extensions along with the build dependencies they need. The bundled extensions in the Matrix are already in the images. Use this for the rest.</p>
+          <Code lang="Dockerfile" code={extensionsDockerfile} />
         </section>
 
         <section id="pie">
           <h3>PIE extensions</h3>
-          <p><code>pie</code> installs and enables extensions published on Packagist. The images carry no compiler, so add <code>$PHPIZE_DEPS</code> and remove it in the same <code>RUN</code> to keep the layer small.</p>
+          <p><code>pie</code> installs and enables extensions published on Packagist. The images have no compiler, so PIE needs <code>$PHPIZE_DEPS</code> installed while it runs. Install them, run PIE, then remove them in the same <code>RUN</code> so the layer stays small.</p>
           <div class="os-switch">
             <div class="seg small" role="radiogroup" aria-label="OS">
               <label><input type="radio" name="pie-os" value="alpine" checked />alpine</label>
@@ -346,7 +583,15 @@ const toc = [
             <div class="alpine"><Code lang="Dockerfile" code={pieAlpine} /></div>
             <div class="trixie"><Code lang="Dockerfile" code={pieTrixie} /></div>
           </div>
-          <p class="muted">On PHP 8.6, PIE is the only way to add PECL extensions. For extensions not on Packagist, <code>install-php-extensions</code> handles its own build dependencies, as in <a href="#extending">Extensions and start-up hooks</a>.</p>
+          <p class="muted">For extensions that aren't on Packagist, <code>install-php-extensions</code> handles its own build dependencies, as in <a href="#extensions">Extensions</a>.</p>
+        </section>
+
+        <section id="composer">
+          <h3>Composer</h3>
+          <p>Composer isn't in the images, because an app doesn't need it to run. Install dependencies in a build stage, then copy only the app and <code>vendor/</code> into the final image.</p>
+          <p>The build stage uses the <code>cli</code> image of the same PHP version and OS. It has the same extensions as the image you deploy, so <code>composer install</code> checks your <code>ext-*</code> requirements against the real ones.</p>
+          <Code lang="Dockerfile" code={composerBuild} />
+          <p class="muted">On trixie, also install <code>unzip</code> in the build stage. Composer needs it to unpack packages.</p>
         </section>
 
         <h2 id="develop">Develop</h2>
@@ -370,7 +615,7 @@ const toc = [
             <div class="alpine"><Code lang="Dockerfile" code={xdebugAlpine} /></div>
             <div class="trixie"><Code lang="Dockerfile" code={xdebugTrixie} /></div>
           </div>
-          <p>Configure it with an <code>.ini</code> file in <code>/usr/local/etc/php/conf.d/</code>, copied in or mounted.</p>
+          <p>Configure it with an <code>.ini</code> file in <code>/usr/local/etc/php/conf.d/</code>, copied in or mounted. See <a href="#how-settings">How settings reach PHP</a>.</p>
           <Code lang="xdebug.ini" code={xdebugIni} />
           <p class="muted">On Linux, <code>host.docker.internal</code> needs <code>--add-host=host.docker.internal:host-gateway</code>. Xdebug has no PHP 8.6 release yet.</p>
         </section>
@@ -379,6 +624,50 @@ const toc = [
           <h3>Reloading FrankenPHP workers</h3>
           <p>FrankenPHP restarts worker scripts when files they watch change. Spread the worker block over several lines.</p>
           <Code lang="compose.yaml" code={reload} />
+        </section>
+
+        <h2 id="updates">Updates</h2>
+        <p>Tags move. Pick one by how much change you want to take on without asking.</p>
+
+        <section id="rebuilds">
+          <h3>When images are rebuilt</h3>
+          <p>A check runs every day and rebuilds each image on its own. An image is rebuilt when:</p>
+          <ul>
+            <li>PHP releases a new patch. It is published under its own tag, such as <code>{v}.13</code>, and the <code>{v}</code> tags move to it.</li>
+            <li>Something it is built from has a new version: the OS base image, nginx, FrankenPHP, s6-overlay or a bundled extension.</li>
+            <li>Its OS packages have a CVE that has a fix available.</li>
+            <li>It was last built more than 30 days ago.</li>
+            <li>This repository changes how the images are built.</li>
+          </ul>
+          <p>Every rebuild also upgrades the OS packages. Images with nothing to change keep their digest, so a quiet tag can go a month without moving.</p>
+          <p>Older patch tags keep being rebuilt the same way. After <code>{v}.13</code> ships, <code>{v}.12</code> still gets OS and extension fixes, built from the same PHP source. Its PHP version never changes. This lasts while its minor version is still built here. Release candidates, such as <code>8.6-rc1</code>, stop once the next one ships.</p>
+          <p>Each image page lists its builds and what changed in each, and the <a href="/changelog/">changelog</a> lists them all.</p>
+        </section>
+
+        <section id="choosing-tag">
+          <h3 id="choosing-tag-h">Which tag to use</h3>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tags by how often they move">
+            <table class="tags" aria-labelledby="choosing-tag-h">
+              <thead><tr><th scope="col">Tag</th><th scope="col">Example</th><th scope="col">Moves when</th></tr></thead>
+              <tbody>
+                <tr><td>Minor</td><td><code>{v}-php-fpm</code></td><td>Any rebuild, including new PHP patches. Most people want this one.</td></tr>
+                <tr><td>Patch</td><td><code>{v}.12-php-fpm</code></td><td>Any rebuild, but PHP stays at {v}.12. Move up to the next patch yourself.</td></tr>
+                <tr><td>Digest</td><td><code>{v}-php-fpm@sha256:…</code></td><td>Never. You get the same image every time, fixes included only when you change the digest.</td></tr>
+                <tr><td>Floating</td><td><code>latest</code>, <code>8</code>, <code>unstable</code></td><td>Can jump to a new minor version. Fine for trying things out, not for production.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>For production, pin a digest and let Renovate or Dependabot open a pull request when the tag behind it moves. You get every fix, and each change goes through your own tests first. Image pages show each tag's current digest.</p>
+        </section>
+
+        <h2 id="verify">Verify</h2>
+        <p>This repository's GitHub Actions workflow signs every image with keyless cosign.</p>
+
+        <section id="signature">
+          <h3>Verify the signature</h3>
+          <p>Check a tag before you pull or deploy it. The same command works for <code>ghcr.io/mintopia/nginx</code>.</p>
+          <Code lang="shell" code={verify} />
+          <p class="muted">The signature is on the multi-arch index, so verify a tag or the index digest, not a single architecture's digest.</p>
         </section>
       </div>
     </div>
@@ -389,25 +678,33 @@ const toc = [
   .usage .prose section { margin-top: 56px; }
   .usage .prose h2 + p + section, .usage .prose h2 + p + .table-wrap { margin-top: 28px; }
   .usage .prose section > h3 { margin-top: 0; }
+  .usage .prose h4 { margin-top: 40px; }
+  .usage .prose h4 + .table-wrap { margin-top: 12px; }
+  .usage .prose ul { margin: 12px 0 16px; padding-left: 20px; }
+  .usage .prose li { margin: 6px 0; }
+  .usage .prose table.env td:first-child { white-space: nowrap; }
+  .usage .prose table.tags code { white-space: nowrap; }
+  .usage .prose table.env td:nth-child(2) { white-space: nowrap; color: var(--muted); }
+  .usage .prose table.env td:nth-child(2) code { background: none; padding: 0; }
   .shapes td a { color: var(--ink); text-decoration-color: var(--control); text-underline-offset: 3px; }
   .shapes td a:hover { text-decoration-color: var(--accent); }
   .ranges :global(td code) { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
 
   .route { display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; margin: 24px 0 16px; padding: 40px 24px 28px; background: var(--board); border-radius: 12px; overflow-x: auto; }
-  .stop { flex: none; display: grid; align-content: center; gap: 2px; min-width: 104px; min-height: 64px; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--raise); font-weight: 700; font-size: 14px; text-align: center; }
-  .stop small { font: 500 12px var(--mono); color: var(--muted); }
+  .stop { flex: none; display: grid; align-content: center; gap: 2px; min-width: 104px; min-height: 64px; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--raise); font-weight: 700; font-size: 0.875rem; text-align: center; }
+  .stop small { font: 500 0.75rem var(--mono); color: var(--muted); }
   .stop.ext { border-style: dashed; border-color: var(--muted); font-weight: 500; }
   .stop.php { border-color: var(--line); }
-  .hop { flex: 1 1 64px; max-width: 180px; position: relative; height: 3px; background: var(--line); margin: 0 4px; }
-  .hop::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--line); border-right: 0; }
-  .hop span { display: block; position: relative; top: -20px; height: 0; padding: 0 14px; text-align: center; font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+  .hop { flex: 1 1 64px; max-width: 180px; position: relative; height: 3px; background: var(--ink); margin: 0 4px; }
+  .hop::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--ink); border-right: 0; }
+  .hop span { display: block; position: relative; top: -20px; height: 0; padding: 0 14px; text-align: center; font: 500 0.75rem var(--mono); color: var(--muted); white-space: nowrap; }
   .ctr { position: relative; display: flex; padding: 20px 16px 16px; border: 1px solid var(--control); border-radius: 14px; background: var(--bg); flex: none; }
-  .ctr-tag { position: absolute; top: -10px; left: 12px; font: 500 11px var(--mono); padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--bg); white-space: nowrap; }
+  .ctr-tag { position: absolute; top: -10px; left: 12px; font: 500 0.75rem var(--mono); padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--bg); white-space: nowrap; }
   .ctr-row { display: flex; align-items: center; }
   .ctr-row .hop { min-width: 120px; }
 
   .demo { margin: 24px 0; }
-  .demo .seg code { font-size: 12px; margin-left: 6px; background: none; padding: 0; }
+  .demo .seg code { font-size: 0.75rem; margin-left: 6px; background: none; padding: 0; }
   .demo .seg label { display: flex; white-space: nowrap; }
   .demo:has(input[value='yes']:checked) .no, .demo:has(input[value='no']:checked) .yes { display: none; }
   .demo .server td:last-child span { font-weight: 700; color: var(--accent-text); }
@@ -423,7 +720,7 @@ const toc = [
     .ctr { flex-direction: column; padding-top: 24px; }
     .ctr-tag { right: 12px; justify-self: start; width: fit-content; max-width: calc(100% - 24px); white-space: normal; overflow-wrap: anywhere; }
     .hop, .ctr-row .hop { flex: none; width: 3px; min-width: 0; max-width: none; height: 40px; margin: 4px auto 16px; }
-    .hop::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--line); border-bottom: 0; }
+    .hop::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--ink); border-bottom: 0; }
     .hop span { position: absolute; height: auto; padding: 0; top: 50%; left: 14px; transform: translateY(-50%); }
   }
 </style>

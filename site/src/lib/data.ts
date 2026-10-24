@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { marked } from 'marked';
-import { codeToHtml } from 'shiki';
 
 const root = resolve(process.cwd(), '..');
 const recordsDir = process.env.SITE_RECORDS ?? resolve(root, '.site-data/records');
@@ -50,16 +49,12 @@ export interface Cve {
   severity: string;
   pkg: string;
   fixed: string;
-}
-
-export interface Scan {
-  fixable: Cve[];
-  unfixed: Record<string, number>;
+  url?: string;
 }
 
 export interface Build extends BuildRecord {
   changes: Change[];
-  scan: Scan | null;
+  cves: Cve[] | null;
   live: boolean;
   until: string | null;
 }
@@ -72,6 +67,9 @@ export interface Image {
   variant: Variant;
   stable: boolean;
   tag: string;
+  patch: string | null;
+  parent: Image | null;
+  previous: Image | null;
   tags: string[];
   current: Build | null;
   builds: Build[];
@@ -81,7 +79,7 @@ export const versions: Record<string, VersionEntry> = JSON.parse(
   readFileSync(resolve(root, 'versions.json'), 'utf8'),
 ).variable.VERSIONS.default;
 
-const byVersion = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+export const byVersion = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 export const versionKeys = Object.keys(versions).sort(byVersion);
 export const latestStable = versionKeys.filter((k) => versions[k].stable).at(-1)!;
 
@@ -97,10 +95,23 @@ const records: BuildRecord[] = [
 
 // written by scripts/scan-cves.sh on each site build; absent when the scan failed
 const cvesFile = process.env.SITE_CVES ?? resolve(root, '.site-data/cves.json');
-const scans: { scanned?: string; builds: Record<string, Scan> } = existsSync(cvesFile)
-  ? JSON.parse(readFileSync(cvesFile, 'utf8'))
-  : { builds: {} };
+const scans: { scanned?: string; php?: { id: string; url: string; severity: string; fixed: string[] }[]; builds: Record<string, Cve[]> } =
+  existsSync(cvesFile) ? JSON.parse(readFileSync(cvesFile, 'utf8')) : { builds: {} };
 export const scannedAt = scans.scanned ?? null;
+
+export const criticals = (b: { cves: Cve[] | null }) => b.cves?.filter((c) => c.severity === 'CRITICAL').length ?? 0;
+export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
+
+// php-src advisories name a fixed X.Y.Z per minor; earlier patches of that minor are affected
+function cves(r: BuildRecord): Cve[] | null {
+  if (!scannedAt) return null;
+  const minor = r.php.split('.').slice(0, 2).join('.');
+  const php = r.variant === 'nginx' ? [] : (scans.php ?? []).flatMap((a) => {
+    const fixed = a.fixed.find((f) => f.startsWith(`${minor}.`));
+    return fixed && byVersion(r.php, fixed) < 0 ? [{ id: a.id, url: a.url, severity: a.severity, pkg: 'php', fixed }] : [];
+  });
+  return [...new Map([...php, ...(scans.builds[r.digest] ?? [])].map((c) => [c.id, c])).values()].sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
+}
 
 const COMPONENT = /^net\.mintopia\.(?:ext\.)?([a-z0-9]+)\.version$/;
 const BASE = 'org.opencontainers.image.base.digest';
@@ -131,7 +142,7 @@ function diff(prev: BuildRecord | undefined, cur: BuildRecord): Change[] {
     const name = cur.labels['org.opencontainers.image.base.name']?.replace('docker.io/library/', '');
     out.push({ kind: 'base', text: name ? `${name} base image updated` : 'New OS base image' });
   }
-  if (out.length === 0) out.push({ kind: 'rebuild', text: 'Rebuilt, no tracked version changed' });
+  if (out.length === 0) out.push({ kind: 'rebuild', text: cur.variant === 'nginx' ? 'Rebuilt with the same versions' : 'Rebuilt with the same PHP and extension versions' });
   return out;
 }
 
@@ -144,22 +155,49 @@ function fallbackTags(version: string, os: string, variant: Variant) {
   return [...new Set(out.split('\n').filter(Boolean))];
 }
 
-function image(version: string, os: string, variant: Variant): Image {
-  const mine = records
-    .filter((r) => r.os === os && r.variant === variant && (variant === 'nginx' || r.version === version))
-    .sort((a, b) => a.time.localeCompare(b.time));
-  // rebuilds that changed nothing tracked are hidden unless the tags still point at them
-  const kept = mine
-    .map((r, i) => ({ r, changes: diff(mine[i - 1], r) }))
-    .filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
-  const builds: Build[] = kept
-    .map(({ r, changes }, i) => ({ ...r, changes, scan: scans.builds[r.digest] ?? null, live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
+// rebuilds that changed nothing tracked are hidden unless the tags still point at them
+function history(mine: { r: BuildRecord; changes: Change[] }[]): Build[] {
+  const kept = mine.filter(({ changes }, i) => i === mine.length - 1 || changes.some((c) => c.kind !== 'rebuild'));
+  return kept
+    .map(({ r, changes }, i) => ({ ...r, changes, cves: cves(r), live: i === kept.length - 1, until: kept[i + 1]?.r.time ?? null }))
     .reverse();
+}
+
+const PATCH = /^\d+\.\d+\.\d+$/;
+
+// the minor's page holds the current patch; each older X.Y.Z gets its own page, chained via previous
+function image(version: string, os: string, variant: Variant): Image {
+  const nginx = variant === 'nginx';
+  const all = records
+    .filter((r) => r.os === os && r.variant === variant && (nginx || r.version === version || r.version.startsWith(`${version}.`)))
+    .sort((a, b) => a.time.localeCompare(b.time));
+  // patch lanes interleave, so a build compares with its own patch, else the minor's previous build
+  const diffed = all.map((r, i) => {
+    const before = all.slice(0, i);
+    const prev = before.findLast((p) => p.php === r.php && PATCH.test(r.php)) ?? before.findLast((p) => p.version === r.version);
+    return { r, changes: diff(prev, r) };
+  });
+  const lane = all.filter((r) => r.version === version);
+  const live = nginx ? '' : lane.at(-1)?.php ?? '';
+  const older = (r: BuildRecord) => !nginx && PATCH.test(r.php) && r.php !== live;
+  const builds = history(diffed.filter(({ r }) => !older(r)));
   const current = builds[0] ?? null;
-  const tags = current?.tags ?? fallbackTags(version, os, variant);
-  const repo = variant === 'nginx' ? 'ghcr.io/mintopia/nginx' : 'ghcr.io/mintopia/php';
-  const tag = variant === 'nginx' ? os : `${version}-${os}-${variant}`;
-  return { id: variant === 'nginx' ? `nginx-${os}` : tag, repo, version, os, variant, stable: versions[version]?.stable ?? true, tag, tags, current, builds };
+  const repo = nginx ? 'ghcr.io/mintopia/nginx' : 'ghcr.io/mintopia/php';
+  const tag = nginx ? os : `${version}-${os}-${variant}`;
+  const stable = versions[version]?.stable ?? true;
+  const img: Image = {
+    id: nginx ? `nginx-${os}` : tag, repo, version, os, variant, stable, tag, patch: PATCH.test(live) ? live : null, parent: null, previous: null,
+    tags: current?.tags ?? fallbackTags(version, os, variant), current, builds,
+  };
+  let prev = img;
+  for (const php of [...new Set(diffed.filter(({ r }) => older(r)).map(({ r }) => r.php))].sort(byVersion).reverse()) {
+    const b = history(diffed.filter(({ r }) => r.php === php));
+    const ptag = `${php}-${os}-${variant}`;
+    // a build of the then-current patch also carried minor tags that have since moved
+    const tags = b[0].tags.filter((t) => t === php || t.startsWith(`${php}-`));
+    prev = prev.previous = { ...img, id: ptag, tag: ptag, patch: php, parent: img, previous: null, tags, current: b[0], builds: b };
+  }
+  return img;
 }
 
 export const images: Image[] = [
@@ -171,6 +209,14 @@ export const images: Image[] = [
   ...OSES.map((os) => image(latestStable, os, 'nginx')),
 ];
 
+export const chain = (img: Image) => {
+  const out: Image[] = [];
+  for (let i: Image | null = img; i; i = i.previous) out.push(i);
+  return out;
+};
+// every image page: the minor images plus their older patches
+export const pages = images.flatMap(chain);
+
 export interface Commit {
   sha: string;
   time: string;
@@ -181,6 +227,7 @@ export interface Commit {
 const SUBJECTS: Record<string, string | null> = {
   a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
   '601b64058c81c6d1f1d07d0fdb7316780be0edc6': null,
+  'cccaa5ca6a3883cfa0cbe286febe426972e9e593': null,
   '0d91d6e2482ee4e71ad708b30c950a20c5e11a55': 'Bundle intl, zip, exif, sockets, gmp, soap and apcu so common frameworks run without a compiler stage',
 };
 
@@ -206,7 +253,7 @@ export interface Day {
 export const changelog: Day[] = (() => {
   const days = new Map<string, Day>();
   const day = (date: string) => days.get(date) ?? days.set(date, { date, changes: [], commits: [] }).get(date)!;
-  for (const img of images) {
+  for (const img of pages) {
     for (const b of img.builds) {
       const d = day(b.time.slice(0, 10));
       for (const c of b.changes) {
@@ -235,14 +282,17 @@ export const repoUrl = 'https://github.com/mintopia/php-base-images';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDate = (iso: string) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const fmtTime = (iso: string) => `${fmtDate(iso)} ${iso.slice(11, 16)}`;
-export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
-export const fmtSeverity = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+export const fmtSeverity = (s: string) => s === 'UNKNOWN' ? 'Unrated' : s.charAt(0) + s.slice(1).toLowerCase();
 export const fmtSize = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 export const shortDigest = (d: string) => d.replace('sha256:', '').slice(0, 12);
 export const packageUrl = (repo: string, id?: string) => `${repoUrl}/pkgs/container/${repo.split('/').pop()}${id ? `/${id}` : ''}`;
 export const commitUrl = (sha: string) => `${repoUrl}/commit/${sha}`;
+export const imageName = (img: Image) => (img.variant === 'nginx' ? `nginx:${img.tag}` : img.tag);
+// registry path shown above imageName in headings
+export const imageHost = (img: Image) => (img.variant === 'nginx' ? img.repo.replace(/\/nginx$/, '') : img.repo);
 export const imagePath = (img: Image) => `${import.meta.env.BASE_URL}images/${img.id}/`;
 export const buildPath = (img: Image, b: BuildRecord) => `${imagePath(img)}${shortDigest(b.digest)}/`;
+export const pinRef = (img: Image, b: BuildRecord) => `${img.repo}:${img.tag}@${b.digest}`;
 export const runUrl = (run: string) => (/^\d+$/.test(run) ? `${repoUrl}/actions/runs/${run}` : null);
 
 const moduleKey = (m: string) => m.toLowerCase().replace(/^zend /, '');
@@ -264,24 +314,9 @@ export const builtInModules = (() => {
 
 // README is the single source for configuration docs; the site renders its sections rather than copying them
 const readme = readFileSync(resolve(root, 'README.md'), 'utf8');
-const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml' };
-export const highlight = (code: string, lang: string) =>
-  codeToHtml(code, { lang: LANGS[lang] ?? 'text', theme: 'github-dark' });
-
-const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-
-async function render(md: string) {
-  let html = marked.parse(md, { async: false }) as string;
-  html = html.replace(/<h(\d)>(.*?)<\/h\1>/g, (_, n, text) =>
-    `<h${n} id="${text.replace(/<[^>]+>/g, '').toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-')}">${text}</h${n}>`);
-  const blocks = [...html.matchAll(/<pre><code(?: class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/g)];
-  for (const [whole, lang = 'text', body] of blocks) html = html.replace(whole, await highlight(unescape(body).replace(/\n$/, ''), lang));
-  return html;
-}
-
 // a single README table, found by the start of its header row
 export function readmeTable(header: string) {
   const start = readme.indexOf(`\n${header}`);
   const end = readme.indexOf('\n\n', start + 1);
-  return render(readme.slice(start, end));
+  return marked.parse(readme.slice(start, end), { async: false }) as string;
 }

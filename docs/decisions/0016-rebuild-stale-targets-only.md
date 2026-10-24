@@ -10,7 +10,7 @@ ADR 0003 and ADR 0009 mark a whole Lane stale when any of its targets is stale, 
 - The upstream check judges each target on its own: missing, label drift on any arch, or fixable CVEs.
 - A Lane builds and merges only its stale targets. BuildKit still builds the stages they share from the registry cache.
 - Every target is CVE-scanned, not just until the first stale one.
-- `--all` (image-input pushes, monthly rebuild, `force`, pull requests) still builds every target.
+- `--all` (image-input pushes, `force`, pull requests) still builds every target. The monthly rebuild is replaced by a per-target age check (ADR 0021).
 
 ## Consequences
 - An upstream change publishes only the images it affects; unaffected targets keep their digest and tags.

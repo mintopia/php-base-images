@@ -1,0 +1,5 @@
+---
+interface Props { tags: string[] }
+const { tags } = Astro.props;
+---
+{tags.map((t) => <code class="chip">{t}</code>)}

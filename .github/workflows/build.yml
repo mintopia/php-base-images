@@ -9,7 +9,6 @@ on:
     types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: "17 4 * * *"
-    - cron: "43 2 1 * *"
   workflow_dispatch:
     inputs:
       force:
@@ -67,7 +66,6 @@ jobs:
       - id: resolve
         env:
           EVENT: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
           BEFORE: ${{ github.event.before }}
           FULL_BUILD: ${{ contains(github.event.pull_request.labels.*.name, 'full-build') }}
           FORCE: ${{ inputs.force }}
@@ -85,7 +83,6 @@ jobs:
                 args+=(--all)
               fi ;;
             pull_request) args+=(--all --no-patches); [ "$FULL_BUILD" = true ] || args+=(--php 8.5 --arch amd64) ;;
-            schedule) [ "$SCHEDULE" != "43 2 1 * *" ] || args+=(--all) ;;
             workflow_dispatch) [ "$FORCE" != true ] || args+=(--all) ;;
           esac
           [ -z "$ONLY_PHP" ] || args+=(--php "$ONLY_PHP")

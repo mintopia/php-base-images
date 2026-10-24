@@ -1,12 +1,12 @@
 ---
+import { Code as Shiki } from 'astro:components';
 import Copy from './Copy.astro';
-import { highlight } from '../lib/data';
 
 interface Props { code: string; lang: string }
 const { code, lang } = Astro.props;
-const html = await highlight(code, lang);
+const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml' };
 ---
 <figure class="code">
   <figcaption><span>{lang}</span><Copy text={code} /></figcaption>
-  <Fragment set:html={html} />
+  <Shiki code={code} lang={(LANGS[lang] ?? 'text') as any} theme="github-dark" />
 </figure>
