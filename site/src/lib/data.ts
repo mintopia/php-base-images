@@ -223,7 +223,7 @@ export interface Commit {
   subject: string;
 }
 
-// igbinary was never in a listed build (ADR 0017); null hides the commit
+// igbinary was never in a listed build (ADR 0013); null hides the commit
 const SUBJECTS: Record<string, string | null> = {
   a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
   '601b64058c81c6d1f1d07d0fdb7316780be0edc6': null,
