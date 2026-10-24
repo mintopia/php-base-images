@@ -2,8 +2,6 @@
 ARG PHP_VERSION=8.5
 ARG FRANKENPHP_VERSION=1
 ARG INSTALLER_VERSION=2.12.3
-# php base the extensions are built against: zts, or nts for upstream fpm images
-ARG EXT_BUILDER=zts
 
 FROM mlocati/php-extension-installer:${INSTALLER_VERSION} AS installer-upstream
 
@@ -15,11 +13,9 @@ RUN sed -i 's/| 805)/| 805 | 806)/' /usr/bin/install-php-extensions \
 FROM ghcr.io/php/pie:bin AS pie
 
 FROM php:${PHP_VERSION}-zts-trixie AS php-zts
-FROM php:${PHP_VERSION}-fpm-trixie AS php-nts
 
 # one stage per extension so a version bump rebuilds only that extension, and they build in parallel
-# hadolint ignore=DL3006
-FROM php-${EXT_BUILDER} AS ext-base
+FROM php-zts AS ext-base
 RUN --mount=type=bind,source=build,target=/build \
     /build/extensions.sh deps
 
