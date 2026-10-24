@@ -86,6 +86,7 @@ The images read all settings from environment variables when the container start
 |---|---|
 | `APP_ROOT` | `/app`, the working directory |
 | `APP_PUBLIC_PATH` | `$APP_ROOT/public`, served by nginx and FrankenPHP |
+| `HOME` | `/tmp`, writable under PUID and a read-only root |
 | `PUID`, `PGID` | unset, so processes run as root |
 | `PHP_MEMORY_LIMIT` | `256M` |
 | `PHP_UPLOAD_MAX_FILESIZE` | `32M` |

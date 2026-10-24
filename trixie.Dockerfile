@@ -74,6 +74,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && find / -xdev -perm /6000 -type f -exec chmod ug-s {} +
 COPY rootfs/common/ rootfs/php/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -109,6 +110,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && setpriv --bounding-set=-all "$f" version
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -141,6 +143,7 @@ RUN --mount=type=bind,from=ext-builder-fpm,source=/runtime-deps,target=/tmp/runt
     && find / -xdev -perm /6000 -type f -exec chmod ug-s {} +
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
