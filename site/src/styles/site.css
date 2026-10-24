@@ -258,6 +258,12 @@ a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY
 .line-pick.off .bullet { --fill: var(--raise); --fg: var(--muted); text-decoration: line-through; cursor: not-allowed; }
 .line-pick:focus-visible { outline: none; box-shadow: none; }
 .line-pick:focus-visible .bullet, .line-pick input:focus-visible + .bullet { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--accent), 0 0 0 6px var(--ink); }
+.picker-readout { flex-basis: 100%; display: grid; gap: 8px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 0.875rem; color: var(--muted); }
+.picker-readout p { margin: 0; }
+.picker-readout .tag-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.picker-readout code { font: 500 0.9375rem var(--mono); color: var(--ink); }
+.picker-readout .readout-label { font-size: 0.75rem; font-weight: 500; }
+.picker-readout .tag-line .readout-label { margin-right: 2px; }
 .picker:not(:has([aria-current])) a.line-pick .bullet { --fill: var(--line); --fg: var(--on-line); }
 .picker:not(:has([aria-current])) a.line-pick .bullet[data-line='8.6'] { --fg: var(--on-amber); }
 
@@ -278,6 +284,7 @@ a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY
 .prose h4 { font-size: 0.9375rem; margin: 32px 0 8px; }
 .prose p { margin: 12px 0; }
 .prose table { margin: 16px 0 24px; font-size: 0.875rem; }
+.prose th { border-bottom: 1px solid var(--control); }
 .prose :is(td, p) code { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
 
 @media (max-width: 900px) {
