@@ -208,7 +208,7 @@ Small, consistent radii: 4px for chips, 5px for bullets, 6px for buttons and seg
 The signature mark: a rounded mono label filled with the PHP line colour, like a transit route bullet.
 - **Shape:** 5px radius, min 44x26px; `lg` 72x72px at 10px radius (52px under 560px); `sm` 36x20px at 4px radius.
 - **Colour:** `var(--line)` fill, white 700 mono text. 8.6 is amber with dark ink text and a dashed inset outline. nginx uses an ink-filled bullet with ground text.
-- **Picker state:** in the picker and home hero, bullets render at 60x38px, 50% opacity at rest, 85% on hover, full with a 2px board + 2px ink ring when current, accent ring on keyboard focus. Lines not built for the current choice drop to 20% and are not links. With nothing selected (`/images/`) every bullet is full strength.
+- **Picker state:** in the picker and home hero, bullets render at 60x40px (matching the segmented controls' outer height), 50% opacity at rest, 85% on hover, full with a 2px board + 2px ink ring when current, accent ring on keyboard focus. Lines not built for the current choice drop to 20% and are not links. With nothing selected (`/images/`) every bullet is full strength.
 
 ### Segmented Control
 - **Style:** inline row in a 1px `control` border, 6px radius, `raise` fill, 38px tall, 14px horizontal padding, 500 14px UI text in muted.

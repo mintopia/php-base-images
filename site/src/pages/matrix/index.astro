@@ -71,7 +71,7 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
     <section>
       <h2 id="variants-h">Variants</h2>
       <div class="table-wrap" tabindex="0" role="region" aria-label="Variants by PHP version">
-        <table class="grid" aria-labelledby="variants-h">
+        <table class="grid variants" aria-labelledby="variants-h">
           <thead><tr><th scope="col">Variant</th><th scope="col">OS</th>{versionKeys.map((v) => <th scope="col"><Bullet version={v} size="sm" /></th>)}</tr></thead>
           <tbody>
             {VARIANTS.flatMap((t) => OSES.map((os, i) => (
@@ -113,10 +113,13 @@ const built = (v: string, os: string, variant: string) => images.some((i) => i.v
 
 <style>
   section + section { margin-top: 56px; }
-  .grid { width: auto; min-width: 100%; }
+  .grid { table-layout: fixed; min-width: 940px; }
+  .grid thead th:first-child { width: 13rem; }
+  .grid.variants thead th:first-child { width: 8rem; }
+  .grid.variants thead th:nth-child(2) { width: 5rem; }
   .grid th[scope='row'] { font-weight: 500; font-size: 0.8125rem; color: var(--ink); border-bottom: 1px solid var(--rule); padding: 12px 24px 12px 0; text-align: left; white-space: nowrap; }
   .grid thead th { padding-right: 24px; }
-  .grid td { padding-right: 24px; white-space: nowrap; }
+  .grid td { padding-right: 24px; }
   .on .mono { font-size: 0.8125rem; border-bottom: 2px solid var(--line); padding-bottom: 1px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
   .off { color: var(--muted); font-size: 0.8125rem; }

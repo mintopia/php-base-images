@@ -183,8 +183,8 @@ td.mono, td .mono { font-size: 0.8125rem; }
 .detail h2:not(:first-child) { margin-top: 44px; }
 .refs > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .refs dt { color: var(--muted); font-size: 0.8125rem; }
-.refs dd { min-width: 0; display: flex; align-items: center; gap: 16px; white-space: nowrap; font-size: 0.8125rem; }
-.refs dd > :first-child { min-width: 0; overflow-x: auto; }
+.refs dd { min-width: 0; display: flex; align-items: center; gap: 16px; font-size: 0.8125rem; }
+.refs dd > :first-child { min-width: 0; word-break: break-all; }
 .refs dd > .btn { margin-left: auto; flex: none; }
 .refs .btn { height: 32px; padding: 0 10px; font-size: 0.8125rem; }
 .timetable tr.live td:first-child { box-shadow: inset 3px 0 var(--accent); padding-left: 12px; }
@@ -200,9 +200,6 @@ td.mono, td .mono { font-size: 0.8125rem; }
 @media (max-width: 960px) {
   .detail { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .dest .btn { margin-left: 0; }
-}
-@media (max-width: 720px) {
-  .refs dd { white-space: normal; overflow-wrap: anywhere; }
 }
 @media (max-width: 560px) {
   .refs > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -260,7 +257,7 @@ td.mono, td .mono { font-size: 0.8125rem; }
 .picker .legend { display: block; font-size: 0.75rem; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
 .picker .lines { display: flex; flex-wrap: wrap; gap: 8px; }
 .line-pick { position: relative; display: block; border-radius: 6px; text-decoration: none; }
-.line-pick .bullet { --fill: color-mix(in srgb, var(--line) 40%, var(--board)); --fg: var(--ink); min-width: 60px; height: 38px; font-size: 0.9375rem; border-radius: 6px; background: var(--fill); color: var(--fg); outline-color: currentColor; transition: box-shadow 0.15s, background-color 0.15s, transform 0.15s; }
+.line-pick .bullet { --fill: color-mix(in srgb, var(--line) 40%, var(--board)); --fg: var(--ink); min-width: 60px; height: 40px; font-size: 0.9375rem; border-radius: 6px; background: var(--fill); color: var(--fg); outline-color: currentColor; transition: box-shadow 0.15s, background-color 0.15s, transform 0.15s; }
 a.line-pick:hover .bullet, label.line-pick:hover .bullet, .line-pick[aria-current] .bullet, .line-pick input:checked + .bullet { --fill: var(--line); --fg: var(--on-line); }
 a.line-pick:hover .bullet[data-line='8.6'], label.line-pick:hover .bullet[data-line='8.6'], .line-pick[aria-current] .bullet[data-line='8.6'], .line-pick input:checked + .bullet[data-line='8.6'] { --fg: var(--on-amber); }
 a.line-pick:hover .bullet, label.line-pick:hover .bullet { transform: translateY(-1px); }
