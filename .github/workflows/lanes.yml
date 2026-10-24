@@ -1,0 +1,192 @@
+name: lanes
+
+# one PHP version's builds and merges; build.yml calls this once per versions.json key
+on:
+  workflow_call:
+    inputs:
+      lanes:
+        type: string
+        required: true
+      merges:
+        type: string
+        required: true
+    secrets:
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  # per-arch images and BuildKit cache; only finished multi-arch images go to php/nginx
+  CACHE_IMAGE: ghcr.io/mintopia/php-base-images-cache
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  build:
+    name: build ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(inputs.lanes) }}
+    env:
+      PUBLISH: ${{ github.event_name != 'pull_request' }}
+      TARGETS: ${{ matrix.targets }}
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v4
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bake variables
+        env:
+          VARS: ${{ toJSON(matrix.vars) }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - name: Build
+        env:
+          PUSH: "false"
+        run: |
+          read -ra targets <<<"$TARGETS"
+          docker buildx bake -f docker-bake.hcl -f versions.json --set '*.output=type=docker' --set '*.cache-to=' "${targets[@]}"
+      - name: Smoke test
+        run: |
+          for t in $TARGETS; do
+            tests/smoke.sh "php:$PHP_VERSION-$OS-$t" "$t"
+          done
+      - name: Record PHP version
+        run: |
+          mkdir -p digests
+          : > digests/php-version
+          for t in $TARGETS; do
+            [ "$t" = nginx ] || { docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -r 'echo PHP_VERSION;' > digests/php-version; break; }
+          done
+          cat digests/php-version
+          for t in $TARGETS; do
+            [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
+          done
+      - name: Push by digest
+        if: env.PUBLISH == 'true'
+        env:
+          PUSH: "true"
+        run: |
+          read -ra targets <<<"$TARGETS"
+          sets=()
+          for t in "${targets[@]}"; do
+            sets+=(--set "$t.output=type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true")
+          done
+          docker buildx bake -f docker-bake.hcl -f versions.json --set '*.tags=' "${sets[@]}" \
+            --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
+          for t in "${targets[@]}"; do
+            jq -re --arg t "$t" '.[$t]["containerimage.digest"]' meta.json > "digests/$t"
+          done
+      - uses: actions/upload-artifact@v7
+        if: env.PUBLISH == 'true'
+        with:
+          name: digests-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: digests/
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && inputs.merges != '[]' }}
+    name: merge ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      # cross-package copies make many registry requests; GHCR allows 2000/minute across every PHP version's merges
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJSON(inputs.merges) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: digests-${{ matrix.version }}-${{ matrix.os }}-*
+          path: digests
+      - uses: docker/setup-buildx-action@v4
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest
+        env:
+          VERSION: ${{ matrix.version }}
+          OS: ${{ matrix.os }}
+          VARIANT: ${{ matrix.variant }}
+          STABLE: ${{ matrix.stable }}
+          LATEST: ${{ matrix.latest }}
+          PATCH: ${{ matrix.patch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/mintopia/php
+          [ "$VARIANT" != nginx ] || image=ghcr.io/mintopia/nginx
+          refs=()
+          php=""
+          for arch in amd64 arm64; do
+            dir="digests/digests-$VERSION-$OS-$arch"
+            refs+=("$CACHE_IMAGE@$(cat "$dir/$VARIANT")")
+            v=$(cat "$dir/php-version")
+            [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
+            php=$v
+          done
+          tags=()
+          names=()
+          # an older patch keeps only its own X.Y.Z tags
+          filter=.
+          if [ "$PATCH" = true ]; then
+            [ "$php" = "$VERSION" ] || { echo "::error::lane $VERSION built PHP $php"; exit 1; }
+            filter="^${php//./\\.}(-|\$)"
+          fi
+          while read -r t; do tags+=(-t "$image:$t"); names+=("$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST" | grep -E "$filter")
+          for i in 1 2 3; do
+            docker buildx imagetools create "${tags[@]}" "${refs[@]}" && break
+            [ "$i" = 3 ] && exit 1
+            sleep $((i * 30))
+          done
+          digest=$(docker buildx imagetools inspect "${tags[1]}" --format '{{json .Manifest}}' | jq -r .digest)
+          cosign sign --yes "$image@$digest"
+          package=$(gh api "/users/$GITHUB_REPOSITORY_OWNER/packages/container/${image##*/}/versions?per_page=100" \
+            -q ".[] | select(.name == \"$digest\") | .id" || true)
+          platforms=$(docker buildx imagetools inspect "$image@$digest" --raw \
+            | jq -c '[.manifests[] | select(.platform.os == "linux") | {key: .platform.architecture, value: .digest}] | from_entries')
+          modules=$(cat "digests/digests-$VERSION-$OS-amd64/modules-$VARIANT" 2>/dev/null \
+            | jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("[") | not))) | unique')
+          sizes=$(scripts/image-sizes.sh "$image@$digest")
+          mkdir -p record
+          docker buildx imagetools inspect "$image@$digest" --format '{{json .Image}}' \
+            | jq -c --arg time "$(date -u +%FT%TZ)" --arg run "$GITHUB_RUN_ID" --arg commit "$GITHUB_SHA" \
+              --arg image "$image" --arg version "$VERSION" --arg os "$OS" --arg variant "$VARIANT" \
+              --arg php "$([ "$VARIANT" = nginx ] || echo "$php")" --argjson stable "$STABLE" --arg digest "$digest" --arg package "$package" --argjson platforms "$platforms" --argjson modules "$modules" --argjson sizes "$sizes" \
+              '{time: $time, run: $run, commit: $commit, image: $image, version: $version, os: $os, variant: $variant,
+                php: $php, stable: $stable, digest: $digest, package: $package, platforms: $platforms, tags: $ARGS.positional, modules: $modules, sizes: $sizes,
+                labels: (.["linux/amd64"].config.Labels // {})}' --args "${names[@]}" \
+            > "record/$VERSION-$OS-$VARIANT.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: record-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.variant }}
+          path: record/
+          if-no-files-found: error
+          retention-days: 1
