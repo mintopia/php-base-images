@@ -218,6 +218,7 @@ const reload = `environment:
 const common = [
   ['APP_ROOT', '<code>/app</code>', 'The app root and the container\'s working directory. The entrypoint changes into it when it exists.'],
   ['APP_PUBLIC_PATH', '<code>$APP_ROOT/public</code>', 'The directory served over HTTP. nginx and FrankenPHP serve files from it.'],
+  ['HOME', '<code>/tmp</code>', 'The home directory, for tools that write config or history there, such as psysh. <code>/tmp</code> stays writable under PUID and a read-only root.'],
   ['PUID', 'unset, so root', 'User ID the processes run as. See <a href="#hardened">Non-root and read-only</a>.'],
   ['PGID', 'same as <code>PUID</code>', 'Group ID the processes run as. Only used when <code>PUID</code> is set.'],
 ];
