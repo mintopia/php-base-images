@@ -84,6 +84,12 @@ function "php_labels" {
   }) : base_labels(upstream, digest)
 }
 
+# src fpm is the same ZTS build as zts, so it shares that extension build
+function "fpm_args" {
+  params = []
+  result = { EXT_BUILDER = PHP_SOURCE == "src" ? "zts" : "nts" }
+}
+
 function "php_contexts" {
   params = []
   result = PHP_SOURCE == "src" ? {
@@ -128,8 +134,6 @@ target "_common" {
     PROTOBUF_VERSION      = PROTOBUF_VERSION
     EXTENSIONS            = join(" ", VERSIONS[PHP_VERSION].extensions)
     PKG_STAMP             = PKG_STAMP
-    # src fpm is the same ZTS build as zts, so it shares that extension build
-    FPM_EXT_BUILDER = PHP_SOURCE == "src" ? "zts" : "nts"
   }
   labels = merge(oci_labels(PHP_SOURCE == "src" ? trimprefix(PHP_TAG, "php-") : VERSIONS[PHP_VERSION].tag), {
     for ext, version in {
@@ -171,6 +175,7 @@ target "frankenphp" {
 target "php-fpm" {
   inherits   = ["_common"]
   target     = "php-fpm"
+  args       = fpm_args()
   tags       = [tag("php-fpm")]
   labels     = php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST)
   contexts   = php_contexts()
@@ -181,6 +186,7 @@ target "php-fpm" {
 target "php-fpm-nginx" {
   inherits = ["_common"]
   target   = "php-fpm-nginx"
+  args     = fpm_args()
   tags     = [tag("php-fpm-nginx")]
   contexts = php_contexts()
   labels = merge(php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST), {
