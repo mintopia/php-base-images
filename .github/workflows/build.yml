@@ -24,11 +24,6 @@ on:
         type: choice
         options: [all, alpine, trixie]
         default: all
-      php_source:
-        description: Build PHP from php-src tags (src, default) or official php images (upstream)
-        type: choice
-        options: [versions.json, upstream, src]
-        default: versions.json
 
 permissions:
   contents: read
@@ -71,7 +66,6 @@ jobs:
           FORCE: ${{ inputs.force }}
           ONLY_PHP: ${{ inputs.php_version }}
           ONLY_OS: ${{ inputs.os }}
-          SOURCE: ${{ inputs.php_source }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=()
@@ -87,7 +81,6 @@ jobs:
           esac
           [ -z "$ONLY_PHP" ] || args+=(--php "$ONLY_PHP")
           [ -z "$ONLY_OS" ] || [ "$ONLY_OS" = all ] || args+=(--os "$ONLY_OS")
-          [ -z "$SOURCE" ] || [ "$SOURCE" = versions.json ] || args+=(--source "$SOURCE")
           scripts/resolve-matrix.sh "${args[@]}"
 
   php:

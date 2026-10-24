@@ -55,11 +55,8 @@ The per-Target check run in a Lane before anything is pushed.
 **Upstream check**:
 The daily job that compares published images against upstream (PHP, OS, nginx, FrankenPHP) and scans them for fixable OS-package CVEs, triggering rebuilds for affected Lanes.
 
-**PHP source**:
-Where a Lane's PHP comes from: `src` (compiled from a php-src tag, default) or `upstream` (official `php` images). Set per version in the Matrix file.
-
 **php-src build**:
-PHP compiled from a php-src git tag by `php-src.Dockerfile`, standing in for the official `php` image when PHP source is `src`.
+PHP compiled from a php-src git tag by `php-src.Dockerfile`. Every Lane uses it.
 
 **Full rebuild**:
 A run with `--all` that rebuilds every Lane regardless of upstream changes: a push that changes an image input, `force`, or a pull request.

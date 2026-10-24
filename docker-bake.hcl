@@ -2,18 +2,11 @@ variable "PHP_VERSION" { default = "8.5" }
 variable "OS" { default = "alpine" }
 variable "PLATFORMS" { default = "" }
 variable "CACHE_REF" { default = "" }
-variable "PHP_SOURCE" {
-  default = "src"
-  validation {
-    condition     = contains(["upstream", "src"], PHP_SOURCE)
-    error_message = "PHP_SOURCE must be upstream or src."
-  }
-}
 variable "PHP_TAG" {
   default = ""
   validation {
-    condition     = PHP_SOURCE != "src" || PHP_TAG != ""
-    error_message = "PHP_TAG (php-src tag, e.g. php-8.5.11) is required when PHP_SOURCE=src (the default); use scripts/resolve-php-tag.sh."
+    condition     = PHP_TAG != ""
+    error_message = "PHP_TAG (php-src tag, e.g. php-8.5.11) is required; use scripts/resolve-php-tag.sh."
   }
 }
 
@@ -38,9 +31,6 @@ variable "PROTOBUF_VERSION" { default = "35.1" }
 # git commit, set by CI
 variable "REVISION" { default = "" }
 
-variable "ZTS_DIGEST" { default = "" }
-variable "FPM_DIGEST" { default = "" }
-variable "FRANKENPHP_DIGEST" { default = "" }
 variable "NGINX_BASE_DIGEST" { default = "" }
 
 function "grpc_version" {
@@ -75,26 +65,20 @@ function "os_base" {
   result = { alpine = "docker.io/library/alpine:${ALPINE_VERSION}", trixie = "docker.io/library/debian:trixie-slim" }[OS]
 }
 
-# PHP_SOURCE=src swaps the php:* bases for php-src.Dockerfile builds on the OS base; tags are unchanged
 function "php_labels" {
-  params = [upstream, digest]
-  result = PHP_SOURCE == "src" ? merge(base_labels(os_base(), NGINX_BASE_DIGEST), {
+  params = []
+  result = merge(base_labels(os_base(), NGINX_BASE_DIGEST), {
     "net.mintopia.php.source" = "php-src"
     "net.mintopia.php.tag"    = PHP_TAG
-  }) : base_labels(upstream, digest)
+  })
 }
 
-# src fpm is the same ZTS build as zts, so it shares that extension build
-function "fpm_args" {
-  params = []
-  result = { EXT_BUILDER = PHP_SOURCE == "src" ? "zts" : "nts" }
-}
-
+# php-src.Dockerfile builds stand in for the php:* bases; tags are unchanged
 function "php_contexts" {
   params = []
-  result = PHP_SOURCE == "src" ? {
+  result = {
     for v in ["zts", "fpm"] : "php:${VERSIONS[PHP_VERSION].tag}-${v}-${OS}" => "target:src-${v}"
-  } : {}
+  }
 }
 
 # every ref of the Lane: a sub-build that only imports its own ref misses layers another target exported
@@ -135,7 +119,7 @@ target "_common" {
     EXTENSIONS            = join(" ", VERSIONS[PHP_VERSION].extensions)
     PKG_STAMP             = PKG_STAMP
   }
-  labels = merge(oci_labels(PHP_SOURCE == "src" ? trimprefix(PHP_TAG, "php-") : VERSIONS[PHP_VERSION].tag), {
+  labels = merge(oci_labels(trimprefix(PHP_TAG, "php-")), {
     for ext, version in {
       grpc          = grpc_version()
       redis         = REDIS_VERSION
@@ -151,7 +135,7 @@ target "cli" {
   inherits   = ["_common"]
   target     = "cli"
   tags       = [tag("cli")]
-  labels     = php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-zts-${OS}", ZTS_DIGEST)
+  labels     = php_labels()
   contexts   = php_contexts()
   cache-from = cache_from()
   cache-to   = cache_to("cli")
@@ -162,12 +146,12 @@ target "frankenphp" {
   target     = "frankenphp"
   tags       = [tag("frankenphp")]
   labels = merge(
-    php_labels("docker.io/dunglas/frankenphp:${FRANKENPHP_VERSION}-php${VERSIONS[PHP_VERSION].tag}-${OS}", FRANKENPHP_DIGEST),
-    PHP_SOURCE == "src" ? { "net.mintopia.frankenphp.version" = FRANKENPHP_SRC_VERSION } : {},
+    php_labels(),
+    { "net.mintopia.frankenphp.version" = FRANKENPHP_SRC_VERSION },
   )
-  contexts = merge(php_contexts(), PHP_SOURCE == "src" ? {
+  contexts = merge(php_contexts(), {
     "dunglas/frankenphp:${FRANKENPHP_VERSION}-php${VERSIONS[PHP_VERSION].tag}-${OS}" = "target:src-frankenphp"
-  } : {})
+  })
   cache-from = cache_from()
   cache-to   = cache_to("frankenphp")
 }
@@ -175,9 +159,8 @@ target "frankenphp" {
 target "php-fpm" {
   inherits   = ["_common"]
   target     = "php-fpm"
-  args       = fpm_args()
   tags       = [tag("php-fpm")]
-  labels     = php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST)
+  labels     = php_labels()
   contexts   = php_contexts()
   cache-from = cache_from()
   cache-to   = cache_to("php-fpm")
@@ -186,10 +169,9 @@ target "php-fpm" {
 target "php-fpm-nginx" {
   inherits = ["_common"]
   target   = "php-fpm-nginx"
-  args     = fpm_args()
   tags     = [tag("php-fpm-nginx")]
   contexts = php_contexts()
-  labels = merge(php_labels("docker.io/library/php:${VERSIONS[PHP_VERSION].tag}-fpm-${OS}", FPM_DIGEST), {
+  labels = merge(php_labels(), {
     "net.mintopia.nginx.version" = NGINX_VERSION
     "net.mintopia.s6.version"    = S6_OVERLAY_VERSION
   })
