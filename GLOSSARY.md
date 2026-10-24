@@ -62,7 +62,7 @@ Where a Lane's PHP comes from: `src` (compiled from a php-src tag, default) or `
 PHP compiled from a php-src git tag by `php-src.Dockerfile`, standing in for the official `php` image when PHP source is `src`.
 
 **Full rebuild**:
-The monthly or manual run that rebuilds every Lane regardless of upstream changes.
+A run with `--all` that rebuilds every Lane regardless of upstream changes: a push that changes an image input, `force`, or a pull request.
 
 **Trusted proxy**:
 A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0012.

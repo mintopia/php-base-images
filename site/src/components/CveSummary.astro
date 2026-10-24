@@ -1,0 +1,17 @@
+---
+import { type Image, type Build, SEVERITIES, fmtSeverity, buildPath, fmtTime, scannedAt } from '../lib/data';
+
+interface Props { img: Image; build: Build | null }
+const { img, build } = Astro.props;
+const cves = build?.cves;
+const count = (s: string) => cves!.filter((c) => c.severity === s).length;
+---
+{build && cves && (
+  <div class="cve-strip" title={`Scanned ${fmtTime(scannedAt!)} UTC`}>
+    <span class="label">CVEs</span>
+    {cves.length === 0 ? <span class="muted">None known</span> : <>
+      {SEVERITIES.filter((s) => count(s) > 0).map((s) => <span class:list={['sev', s.toLowerCase()]}><b class="mono">{count(s)}</b> {fmtSeverity(s)}</span>)}
+      <a href={`${buildPath(img, build)}cves/`}>View {cves.length === 1 ? 'the CVE' : `all ${cves.length} CVEs`}</a>
+    </>}
+  </div>
+)}

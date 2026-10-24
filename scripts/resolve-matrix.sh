@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { echo "usage: $0 [--all] [--dry-run] [--php VERSION] [--os OS] [--arch ARCH] [--source upstream|src] [--no-patches]" >&2; exit 64; }
+usage() { echo "usage: $0 [--all] [--php VERSION] [--os OS] [--arch ARCH] [--source upstream|src] [--no-patches]" >&2; exit 64; }
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-all=false dry_run=false patches=true only_php='' only_os='' only_arch='' only_source=''
+all=false patches=true only_php='' only_os='' only_arch='' only_source=''
 while [ $# -gt 0 ]; do
 	case $1 in
 		--all) all=true ;;
-		--dry-run) dry_run=true ;;
 		--no-patches) patches=false ;;
 		--php) only_php=${2:?}; shift ;;
 		--os) only_os=${2:?}; shift ;;
@@ -93,7 +92,7 @@ otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
 common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
-	'{FRANKENPHP_VERSION: "1", REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
+	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -142,7 +141,7 @@ frankenphp_src=''
 plan() {
 	local key=$1 lane=$2 php_source=$3 php_tag=$4; shift 4
 	local patch=false version tag exts stable src_vars fp sha os targets frankenphp zts fpm vars image minor grpc nginx base
-	local stale rebuild t ref reasons published exp arch diff cves
+	local stale rebuild t ref reasons published exp arch diff cves built
 	[ "$lane" = "$key" ] || patch=true
 	plan_lanes='[]' plan_merges='[]'
 	version=$(jq -c --arg k "$key" '.[$k]' <<<"$matrix")
@@ -207,6 +206,10 @@ plan() {
 								'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
 							[ -z "$diff" ] || reasons+=("$arch($diff)")
 						done
+						if [ ${#reasons[@]} -eq 0 ]; then
+							built=$(jq -r '[.[].created | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601] | min' <<<"$published")
+							[ "$built" -gt "$(($(date +%s) - 30 * 86400))" ] || reasons+=("built $(jq -rn --argjson t "$built" '$t | todate'), over 30 days")
+						fi
 						if [ ${#reasons[@]} -eq 0 ]; then
 							cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
 							[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
@@ -273,7 +276,7 @@ for key in "${selected[@]}"; do
 	[ "$lanes" = '[]' ] || plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" '. + {($k): {lanes: $l, merges: $m}}' <<<"$plans")
 done
 
-if $dry_run || [ -z "${GITHUB_OUTPUT:-}" ]; then
+if [ -z "${GITHUB_OUTPUT:-}" ]; then
 	jq . <<<"$plans"
 else
 	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; } >> "$GITHUB_OUTPUT"

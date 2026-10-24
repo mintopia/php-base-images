@@ -59,8 +59,6 @@ jobs:
           VARS: ${{ toJSON(matrix.vars) }}
         run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
       - name: Build
-        env:
-          PUSH: "false"
         run: |
           read -ra targets <<<"$TARGETS"
           docker buildx bake -f docker-bake.hcl -f versions.json --set '*.output=type=docker' --set '*.cache-to=' "${targets[@]}"
@@ -82,8 +80,6 @@ jobs:
           done
       - name: Push by digest
         if: env.PUBLISH == 'true'
-        env:
-          PUSH: "true"
         run: |
           read -ra targets <<<"$TARGETS"
           sets=()
