@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { echo "usage: $0 [--all] [--dry-run] [--php VERSION] [--os OS] [--arch ARCH] [--source upstream|src]" >&2; exit 64; }
+usage() { echo "usage: $0 [--all] [--dry-run] [--php VERSION] [--os OS] [--arch ARCH] [--source upstream|src] [--no-patches]" >&2; exit 64; }
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-all=false dry_run=false only_php='' only_os='' only_arch='' only_source=''
+all=false dry_run=false patches=true only_php='' only_os='' only_arch='' only_source=''
 while [ $# -gt 0 ]; do
 	case $1 in
 		--all) all=true ;;
 		--dry-run) dry_run=true ;;
+		--no-patches) patches=false ;;
 		--php) only_php=${2:?}; shift ;;
 		--os) only_os=${2:?}; shift ;;
 		--arch) only_arch=${2:?}; shift ;;
@@ -125,23 +126,34 @@ expected_labels() {
 		+ (if $v == "php-fpm-nginx" then {"net.mintopia.s6.version": $vars.S6_OVERLAY_VERSION} else {} end)'
 }
 
-lanes='[]'
-merges='[]'
-for key in "${selected[@]}"; do
+# "X.Y.Z os" for every patch release published to GHCR
+published_patches() {
+	local token last='' page
+	token=$(curl -fsSL --retry 3 "https://ghcr.io/token?scope=repository:mintopia/php:pull" | jq -r .token)
+	while page=$(curl -fsSL --retry 3 -H "Authorization: Bearer $token" "https://ghcr.io/v2/mintopia/php/tags/list?n=1000&last=$last" | jq -r '.tags // [] | .[]') && [ -n "$page" ]; do
+		sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+)-(alpine|trixie)-cli$/\1 \2/p' <<<"$page"
+		last=$(tail -1 <<<"$page")
+	done
+}
+
+frankenphp_src=''
+# plan <versions.json key> <lane> <php source> <php-src tag> <os...>: sets plan_lanes and plan_merges
+# lane is the key for the current patch, or X.Y.Z for an older patch that keeps only its own tags
+plan() {
+	local key=$1 lane=$2 php_source=$3 php_tag=$4; shift 4
+	local patch=false version tag exts stable src_vars fp sha os targets frankenphp zts fpm vars image minor grpc nginx base
+	local stale rebuild t ref reasons published exp arch diff cves
+	[ "$lane" = "$key" ] || patch=true
+	plan_lanes='[]' plan_merges='[]'
 	version=$(jq -c --arg k "$key" '.[$k]' <<<"$matrix")
 	tag=$(jq -r .tag <<<"$version")
 	exts=$(jq -c .extensions <<<"$version")
 	stable=$(jq -r .stable <<<"$version")
-	php_source=${only_source:-$(jq -r '.source // "src"' <<<"$version")}
-	[[ $php_source =~ ^(upstream|src)$ ]] || { log "$key: source must be upstream or src, got '$php_source'"; exit 1; }
 	src_vars='{"PHP_SOURCE": "upstream"}'
 	if [ "$php_source" = src ]; then
-		unstable=()
-		[ "$stable" = true ] || unstable=(--unstable)
-		php_tag=$(safe "$("$root/scripts/resolve-php-tag.sh" "$key" "${unstable[@]}")")
 		src_vars=$(jq -c -n --arg t "$php_tag" '{PHP_SOURCE: "src", PHP_TAG: $t}')
 		if [ "$(jq -r .frankenphp <<<"$version")" = true ]; then
-			if [ -z "${frankenphp_src:-}" ]; then
+			if [ -z "$frankenphp_src" ]; then
 				fp=$(github_release php/frankenphp)
 				# pins the tarball the build fetches to the one seen here
 				sha=$(safe "$(curl -fsSL --retry 3 "https://github.com/php/frankenphp/archive/refs/tags/v$fp.tar.gz" | sha256sum | cut -d' ' -f1)")
@@ -150,7 +162,7 @@ for key in "${selected[@]}"; do
 			src_vars=$(jq -c --argjson fp "$frankenphp_src" '. + $fp' <<<"$src_vars")
 		fi
 	fi
-	for os in alpine trixie; do
+	for os in "$@"; do
 		[ -n "${os_vars[$os]:-}" ] || continue
 		jq -e --arg os "$os" '.os | index($os)' <<<"$version" >/dev/null || continue
 		targets=(cli php-fpm php-fpm-nginx)
@@ -159,7 +171,7 @@ for key in "${selected[@]}"; do
 			targets+=(frankenphp)
 			[ "$php_source" = src ] || frankenphp=$(digest "dunglas/frankenphp:1-php$tag-$os")
 		fi
-		[ "$key" != "$nginx_key" ] || targets+=(nginx)
+		$patch || [ "$key" != "$nginx_key" ] || targets+=(nginx)
 		zts='' fpm=''
 		if [ "$php_source" != src ]; then
 			zts=$(digest "php:$tag-zts-$os")
@@ -179,53 +191,91 @@ for key in "${selected[@]}"; do
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
 
-		if ! $all; then
-			# every publish is permanent, so only stale targets are rebuilt
+		# every publish is permanent, so only stale targets are rebuilt; an older patch never gains targets it was not published with
+		if ! $all || $patch; then
 			stale=() rebuild=()
 			for t in "${targets[@]}"; do
-				if [ "$t" = nginx ]; then ref=ghcr.io/mintopia/nginx:$os; else ref=ghcr.io/mintopia/php:$key-$os-$t; fi
+				if [ "$t" = nginx ]; then ref=ghcr.io/mintopia/nginx:$os; else ref=ghcr.io/mintopia/php:$lane-$os-$t; fi
 				reasons=()
 				if published=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' 2>/dev/null); then
-					exp=$(expected_labels "$t" "$vars" "$exts")
-					for arch in "${archs[@]}"; do
-						diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
-							'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
-						[ -z "$diff" ] || reasons+=("$arch($diff)")
-					done
-					if [ ${#reasons[@]} -eq 0 ]; then
-						cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
-						[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
+					if $all; then
+						reasons=(forced)
+					else
+						exp=$(expected_labels "$t" "$vars" "$exts")
+						for arch in "${archs[@]}"; do
+							diff=$(jq -r --arg p "linux/$arch" --argjson exp "$exp" \
+								'(.[$p].config.Labels // {}) as $a | [$exp | to_entries[] | select(.value != $a[.key]) | .key] | join(",")' <<<"$published")
+							[ -z "$diff" ] || reasons+=("$arch($diff)")
+						done
+						if [ ${#reasons[@]} -eq 0 ]; then
+							cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
+							[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
+						fi
 					fi
+				elif $patch; then
+					continue
 				else
 					reasons=(missing)
 				fi
 				[ ${#reasons[@]} -eq 0 ] || { stale+=("$t: ${reasons[*]}"); rebuild+=("$t"); }
 			done
 			if [ ${#rebuild[@]} -eq 0 ]; then
-				log "up to date: $key $os"
+				log "up to date: $lane $os"
 				continue
 			fi
-			log "stale: $key $os: $(IFS=';'; echo "${stale[*]}")"
+			log "stale: $lane $os: $(IFS=';'; echo "${stale[*]}")"
 			targets=("${rebuild[@]}")
 		fi
 
 		for arch in "${archs[@]}"; do
-			lanes=$(jq -c --arg key "$key" --arg os "$os" --arg arch "$arch" --arg targets "${targets[*]}" --argjson vars "$vars" \
-				'. + [{version: $key, os: $os, arch: $arch, targets: $targets,
-					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php-base-images-cache:\($key)-\($os)-\($arch)"})}]' <<<"$lanes")
+			plan_lanes=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --arg targets "${targets[*]}" --argjson vars "$vars" \
+				'. + [{version: $lane, os: $os, arch: $arch, targets: $targets,
+					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php-base-images-cache:\($lane)-\($os)-\($arch)"})}]' <<<"$plan_lanes")
 		done
 
 		[ ${#archs[@]} -eq 2 ] || continue
 		for t in "${targets[@]}"; do
-			merges=$(jq -c --arg key "$key" --arg os "$os" --arg t "$t" --argjson stable "$stable" --arg latest "$latest" \
-				'. + [{version: $key, os: $os, variant: $t, stable: $stable, latest: $latest}]' <<<"$merges")
+			plan_merges=$(jq -c --arg lane "$lane" --arg os "$os" --arg t "$t" --argjson stable "$stable" --arg latest "$latest" --argjson patch "$patch" \
+				'. + [{version: $lane, os: $os, variant: $t, stable: $stable, latest: $latest, patch: $patch}]' <<<"$plan_merges")
 		done
 	done
+}
+
+patch_tags=''
+! $patches || patch_tags=$(published_patches)
+
+# one entry per versions.json key; build.yml runs each as its own reusable workflow call, so the 256-job matrix limit is per key
+plans='{}'
+for key in "${selected[@]}"; do
+	stable=$(jq -r --arg k "$key" '.[$k].stable' <<<"$matrix")
+	php_source=${only_source:-$(jq -r --arg k "$key" '.[$k].source // "src"' <<<"$matrix")}
+	[[ $php_source =~ ^(upstream|src)$ ]] || { log "$key: source must be upstream or src, got '$php_source'"; exit 1; }
+	unstable=()
+	[ "$stable" = true ] || unstable=(--unstable)
+	php_tag=$(safe "$("$root/scripts/resolve-php-tag.sh" "$key" "${unstable[@]}")")
+	plan "$key" "$key" "$php_source" "$php_tag" alpine trixie
+	lanes=$plan_lanes merges=$plan_merges
+
+	# older patches build from php-src: upstream stops refreshing an image once its patch is superseded
+	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check
+	while read -r older os; do
+		[ "php-$older" != "$php_tag" ] || continue
+		plan "$key" "$older" src "php-$older" "$os"
+		l=$(jq -c --argjson p "$plan_lanes" '. + $p' <<<"$lanes")
+		m=$(jq -c --argjson p "$plan_merges" '. + $p' <<<"$merges")
+		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ]; then
+			lanes=$l merges=$m
+		else
+			log "deferred, matrix full: $older $os"
+		fi
+	done < <(awk -v k="$key" 'split($1, a, ".") == 3 && a[1] "." a[2] == k' <<<"$patch_tags" | sort -rV)
+
+	[ "$lanes" = '[]' ] || plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" '. + {($k): {lanes: $l, merges: $m}}' <<<"$plans")
 done
 
 if $dry_run || [ -z "${GITHUB_OUTPUT:-}" ]; then
-	jq -n --argjson lanes "$lanes" --argjson merges "$merges" '{lanes: $lanes, merges: $merges}'
+	jq . <<<"$plans"
 else
-	{ echo "lanes=$lanes"; echo "merges=$merges"; } >> "$GITHUB_OUTPUT"
-	log "$(jq length <<<"$lanes") lanes, $(jq length <<<"$merges") merges"
+	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; } >> "$GITHUB_OUTPUT"
+	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges") | join("; ")' <<<"$plans")"
 fi

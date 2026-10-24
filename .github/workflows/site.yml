@@ -67,6 +67,9 @@ jobs:
           exit 1
       - id: data
         run: echo "sha=$(git -C data rev-parse -q --verify HEAD || echo none)" >> "$GITHUB_OUTPUT"
+      # display only; a failed scan leaves the site without CVE flags rather than blocking the deploy
+      - name: Scan builds for CVEs
+        run: scripts/scan-cves.sh data/records "$RUNNER_TEMP/cves" > "$RUNNER_TEMP/cves.json" || { echo "::warning::CVE scan failed"; rm -f "$RUNNER_TEMP/cves.json"; }
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -76,6 +79,7 @@ jobs:
         working-directory: site
         env:
           SITE_RECORDS: ${{ github.workspace }}/data/records
+          SITE_CVES: ${{ runner.temp }}/cves.json
         run: |
           npm ci
           npm run build

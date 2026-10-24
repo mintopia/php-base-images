@@ -6,7 +6,7 @@ import Timetable from '../../../components/Timetable.astro';
 import Facts from '../../../components/Facts.astro';
 import Examples from '../../../components/Examples.astro';
 import Versions from '../../../components/Versions.astro';
-import { images, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension } from '../../../lib/data';
+import { SEVERITIES, images, type Image, type Build, fmtTime, shortDigest, commitUrl, packageUrl, runUrl, buildPath, imagePath, isAddedExtension, scannedAt, fmtSeverity } from '../../../lib/data';
 
 export function getStaticPaths() {
   return images.flatMap((img) =>
@@ -20,6 +20,8 @@ const { img, b, newer, older } = Astro.props as { img: Image; b: Build; newer: B
 const base = import.meta.env.BASE_URL;
 const pinned = b.live ? `${img.repo}:${img.tag}@${b.digest}` : `${img.repo}@${b.digest}`;
 const run = runUrl(b.run);
+const fixable = b.scan?.fixable ?? [];
+const unfixed = Object.entries(b.scan?.unfixed ?? {}).sort(([x], [y]) => SEVERITIES.indexOf(x) - SEVERITIES.indexOf(y));
 ---
 <Base title={`${img.tag} · ${fmtTime(b.time)} · mintopia/php`} description={`Build of ${img.repo}:${img.tag} on ${fmtTime(b.time)} UTC, digest ${shortDigest(b.digest)}.`} current="images">
   <div class="lined" data-line={img.variant === 'nginx' ? '' : img.version}>
@@ -53,6 +55,34 @@ const run = runUrl(b.run);
           {b.changes.map((c) => <li>{c.text}</li>)}
           {older && <li class="muted">Compared with <a href={buildPath(img, older)}>{fmtTime(older.time)}</a></li>}
         </ul>
+
+        {scannedAt && b.scan && (
+          <>
+            <h2>Vulnerabilities</h2>
+            {fixable.length === 0 ? <p>No OS package CVEs with a fix available.</p> : (
+              <div class="table-wrap">
+                <table class="cves">
+                  <thead><tr><th>CVE</th><th>Severity</th><th>Package</th><th>Fixed in</th></tr></thead>
+                  <tbody>
+                    {fixable.sort((x, y) => SEVERITIES.indexOf(x.severity) - SEVERITIES.indexOf(y.severity)).map((c) => (
+                      <tr>
+                        <td class="mono">{c.id.startsWith('CVE-') ? <a href={`https://nvd.nist.gov/vuln/detail/${c.id}`}>{c.id}</a> : c.id}</td>
+                        <td>{fmtSeverity(c.severity)}</td>
+                        <td class="mono">{c.pkg}</td>
+                        <td class="mono">{c.fixed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p class="note">
+              {unfixed.length > 0 && <>Also {unfixed.map(([s, n]) => `${n} ${fmtSeverity(s).toLowerCase()}`).join(', ')} with no fix released yet. </>}
+              {fixable.length > 0 && (b.live ? 'The next daily check rebuilds this image with the fixes. ' : 'Pull the live tag for a build with the fixes. ')}
+              Scanned {fmtTime(scannedAt)} UTC with Trivy against the image's SBOM.
+            </p>
+          </>
+        )}
 
         <h2>Provenance</h2>
         <dl class="refs">
