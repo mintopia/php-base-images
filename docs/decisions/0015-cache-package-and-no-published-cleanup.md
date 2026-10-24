@@ -1,6 +1,6 @@
 # Decision: Build intermediates live in a separate cache package; published images are never deleted
 
-Status: accepted
+Status: superseded by 0023-build-product-cache.md
 Date: 2026-10-23
 
 ## Context

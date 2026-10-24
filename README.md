@@ -50,7 +50,8 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Each site build lists every recorded build's CVEs and flags the critical ones. OS package CVEs come from a Trivy scan of the build's SBOM, and PHP CVEs from php-src's security advisories.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - The workflow signs published manifests with keyless cosign. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
-- Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`, and the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. [php-base-images-cache](https://github.com/mintopia/php-base-images-cache) cleans up the cache package.
+- Each lane first restores its build products (compiled PHP, FrankenPHP and the PIE and grpc extensions) from the GitHub Actions cache, and builds any that are missing. A `products` job before the lanes keeps every lane's products cached, rebuilding them after 30 days. There is no BuildKit registry cache.
+- Lanes push untagged per-arch images by digest to `php` or `nginx`. The merge job makes the multi-arch image from them and then deletes the per-arch index it consumed. Published images are never deleted, so superseded `@sha256:` digests keep resolving. See `docs/decisions/0023-build-product-cache.md`.
 
 ### PHP source
 
