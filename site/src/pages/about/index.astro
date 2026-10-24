@@ -90,6 +90,7 @@ const toc = [
           </table>
         </div>
         <p class="muted">Every patch release keeps its own tag, such as <code>{v}.13-php-fpm</code>, next to the moving <code>{v}-php-fpm</code>. The <a href={`${base}matrix/`}>Matrix</a> shows which extensions each version has, and why 8.6 leaves some out.</p>
+        <p class="muted">Tags for older PHP versions are kept up to date too, with the same rebuilds as the latest. Versions follow PHP's <a href="https://www.php.net/supported-versions.php">supported versions</a> lifecycle, and the aim is to build images for each one for as long as PHP supports it.</p>
 
         <h2 id="build">How an image is built</h2>
         <p>Everything runs on GitHub Actions in <a href={repoUrl}>the repository</a>. Pull requests run the build job for PHP {v} on amd64 and publish nothing.</p>
