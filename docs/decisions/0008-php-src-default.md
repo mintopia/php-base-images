@@ -11,7 +11,7 @@ ADR 0006 added `PHP_SOURCE=src` as an opt-in fallback for when the official `php
 
 ## Consequences
 - Releases ship when php-src tags them, not when docker-library publishes.
-- Every Lane compiles PHP twice (zts, fpm) plus FrankenPHP; cold builds take about 10 minutes longer per arch. The registry cache covers rebuilds where the tag is unchanged.
+- Every Lane compiles PHP once (one ZTS build serves zts, fpm and FrankenPHP's libphp) plus FrankenPHP itself; cold builds take about 10 minutes longer per arch. The registry cache covers rebuilds where the tag is unchanged.
 - We own configure flags and build deps for every version, and must track docker-library changes.
 - Local `docker buildx bake` needs `PHP_TAG` (from `scripts/resolve-php-tag.sh`), or `PHP_SOURCE=upstream`.
 - Published images switch base: `org.opencontainers.image.base.*` names alpine / debian:trixie-slim, and `net.mintopia.php.{source,tag}` labels appear. The first daily run after merge sees every Lane as stale and rebuilds it.

@@ -2,8 +2,8 @@
 ARG PHP_VERSION=8.5
 ARG FRANKENPHP_VERSION=1
 ARG INSTALLER_VERSION=2.12.3
-# zts when the fpm base is the same ZTS build as zts (PHP_SOURCE=src)
-ARG FPM_EXT_BUILDER=nts
+# php base the extensions are built against: zts, or nts for upstream fpm images
+ARG EXT_BUILDER=zts
 ARG ALPINE_VERSION=3
 
 FROM mlocati/php-extension-installer:${INSTALLER_VERSION} AS installer-upstream
@@ -15,34 +15,70 @@ RUN sed -i 's/| 805)/| 805 | 806)/' /usr/bin/install-php-extensions \
     && grep -q '| 806)' /usr/bin/install-php-extensions
 FROM ghcr.io/php/pie:bin AS pie
 
-FROM php:${PHP_VERSION}-zts-alpine AS ext-builder-zts
-ARG EXTENSIONS
-ARG REDIS_VERSION
-ARG APCU_VERSION
-ARG MONGODB_VERSION
-ARG OPENTELEMETRY_VERSION
-ARG PROTOBUF_VERSION
-ARG GRPC_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh
+FROM php:${PHP_VERSION}-zts-alpine AS php-zts
+FROM php:${PHP_VERSION}-fpm-alpine AS php-nts
 
-FROM php:${PHP_VERSION}-fpm-alpine AS ext-builder-nts
-ARG EXTENSIONS
-ARG REDIS_VERSION
-ARG APCU_VERSION
-ARG MONGODB_VERSION
-ARG OPENTELEMETRY_VERSION
-ARG PROTOBUF_VERSION
-ARG GRPC_VERSION
-RUN --mount=type=bind,source=build,target=/build \
-    --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
-    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
-    /build/extensions.sh
-
+# one stage per extension so a version bump rebuilds only that extension, and they build in parallel
 # hadolint ignore=DL3006
-FROM ext-builder-${FPM_EXT_BUILDER} AS ext-builder-fpm
+FROM php-${EXT_BUILDER} AS ext-base
+RUN --mount=type=bind,source=build,target=/build \
+    /build/extensions.sh deps
+
+FROM ext-base AS ext-bundled
+ARG EXTENSIONS
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
+    /build/extensions.sh bundled
+
+FROM ext-base AS ext-grpc
+ARG EXTENSIONS
+ARG GRPC_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    /build/extensions.sh grpc
+
+FROM ext-base AS ext-redis
+ARG EXTENSIONS
+ARG REDIS_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
+    /build/extensions.sh pie redis "phpredis/phpredis:$REDIS_VERSION"
+
+FROM ext-base AS ext-apcu
+ARG EXTENSIONS
+ARG APCU_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
+    /build/extensions.sh pie apcu "apcu/apcu:$APCU_VERSION"
+
+FROM ext-base AS ext-mongodb
+ARG EXTENSIONS
+ARG MONGODB_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
+    /build/extensions.sh pie mongodb "mongodb/mongodb-extension:$MONGODB_VERSION"
+
+FROM ext-base AS ext-opentelemetry
+ARG EXTENSIONS
+ARG OPENTELEMETRY_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
+    /build/extensions.sh pie opentelemetry "open-telemetry/ext-opentelemetry:$OPENTELEMETRY_VERSION"
+
+FROM ext-base AS ext-protobuf
+ARG EXTENSIONS
+ARG PROTOBUF_VERSION
+RUN --mount=type=bind,source=build,target=/build \
+    --mount=type=bind,from=pie,source=/pie,target=/usr/local/bin/pie \
+    /build/extensions.sh pie protobuf "pie-extensions/protobuf:$PROTOBUF_VERSION"
+
+FROM scratch AS ext
+COPY --link --from=ext-bundled /out/ /
+COPY --link --from=ext-grpc /out/ /
+COPY --link --from=ext-redis /out/ /
+COPY --link --from=ext-apcu /out/ /
+COPY --link --from=ext-mongodb /out/ /
+COPY --link --from=ext-opentelemetry /out/ /
+COPY --link --from=ext-protobuf /out/ /
 
 FROM --platform=$BUILDPLATFORM alpine:3 AS s6
 ARG S6_OVERLAY_VERSION
@@ -59,15 +95,16 @@ RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1
 
 FROM php:${PHP_VERSION}-zts-alpine AS cli
 ARG PKG_STAMP
-COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --from=pie /pie /usr/local/bin/pie
-COPY --from=ext-builder-zts /out/ /
+COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
+COPY --link --from=pie /pie /usr/local/bin/pie
+COPY --link --from=ext /files/ /
 # hadolint ignore=DL3018
-RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
-    apk upgrade --no-cache \
+RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
+    cat /tmp/deps/* > /tmp/runtime-deps \
+    && apk upgrade --no-cache \
     && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
-    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
-COPY rootfs/common/ rootfs/php/ /
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && rm /tmp/runtime-deps
+COPY --link rootfs/common/ rootfs/php/ /
 ENV APP_ROOT=/app \
     HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
@@ -84,20 +121,21 @@ CMD ["php", "-a"]
 
 FROM dunglas/frankenphp:${FRANKENPHP_VERSION}-php${PHP_VERSION}-alpine AS frankenphp
 ARG PKG_STAMP
-COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --from=pie /pie /usr/local/bin/pie
-COPY --from=ext-builder-zts /out/ /
+COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
+COPY --link --from=pie /pie /usr/local/bin/pie
+COPY --link --from=ext /files/ /
 # hadolint ignore=DL3018
-RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runtime-deps \
-    apk upgrade --no-cache \
+RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
+    cat /tmp/deps/* > /tmp/runtime-deps \
+    && apk upgrade --no-cache \
     && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
-    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && rm /tmp/runtime-deps \
     && chmod 1777 /data /config /data/caddy /config/caddy \
     # file caps stop frankenphp starting under --cap-drop ALL; a plain copy drops them
     && f=/usr/local/bin/frankenphp \
     && { setpriv --bounding-set=-all "$f" version >/dev/null 2>&1 || { cp "$f" "$f.new" && mv "$f.new" "$f"; }; } \
     && setpriv --bounding-set=-all "$f" version
-COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
+COPY --link rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
 ENV APP_ROOT=/app \
     HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
@@ -115,16 +153,17 @@ CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", 
 
 FROM php:${PHP_VERSION}-fpm-alpine AS php-fpm
 ARG PKG_STAMP
-COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --from=pie /pie /usr/local/bin/pie
-COPY --from=ext-builder-fpm /out/ /
+COPY --link --from=installer /usr/bin/install-php-extensions /usr/local/bin/
+COPY --link --from=pie /pie /usr/local/bin/pie
+COPY --link --from=ext /files/ /
 # hadolint ignore=DL3018
-RUN --mount=type=bind,from=ext-builder-fpm,source=/runtime-deps,target=/tmp/runtime-deps \
-    apk upgrade --no-cache \
+RUN --mount=type=bind,from=ext,source=/deps,target=/tmp/deps \
+    cat /tmp/deps/* > /tmp/runtime-deps \
+    && apk upgrade --no-cache \
     && xargs apk add --no-cache setpriv < /tmp/runtime-deps \
-    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && rm /tmp/runtime-deps \
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
-COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
+COPY --link rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
 ENV APP_ROOT=/app \
     HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
@@ -154,8 +193,8 @@ ADD --checksum=sha256:ff7cf138acc09f2a5029300ab713fe6a1440605fca72e2bab76a4da920
 RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,2 /etc/alpine-release)" >> /etc/apk/repositories \
     && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst \
     && rm /etc/nginx/conf.d/default.conf
-COPY --from=s6 /s6/ /
-COPY rootfs/nginx/ rootfs/s6/ /
+COPY --link --from=s6 /s6/ /
+COPY --link rootfs/nginx/ rootfs/s6/ /
 ENV PHP_FPM_HOST=127.0.0.1 \
     PHP_FPM_PORT=9000 \
     PHP_FPM_STATUS_ALLOW="127.0.0.1 ::1" \
@@ -175,7 +214,7 @@ RUN printf '@nginx https://nginx.org/packages/alpine/v%s/main\n' "$(cut -d. -f1,
     && apk upgrade --no-cache \
     && apk add --no-cache "nginx@nginx~${NGINX_VERSION}" gettext-envsubst setpriv \
     && rm /etc/nginx/conf.d/default.conf
-COPY rootfs/common/ rootfs/nginx/ /
+COPY --link rootfs/common/ rootfs/nginx/ /
 ENV APP_ROOT=/app \
     PHP_FPM_HOST=php-fpm \
     PHP_FPM_PORT=9000 \
