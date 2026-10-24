@@ -136,7 +136,8 @@ published_patches() {
 
 frankenphp_src=''
 # plan <versions.json key> <lane> <php-src tag> <os...>: sets plan_lanes, plan_merges and plan_products
-# plan_products has every lane, stale or not, so the products job keeps all their build products cached
+# plan_products has the current lane on every arch, stale or not, so the products job keeps its build products cached;
+# an older patch only gets products for the lanes it builds, so they are saved but may be evicted when idle
 # lane is the key for the current patch, or X.Y.Z for an older patch that keeps only its own tags
 plan() {
 	local key=$1 lane=$2 php_tag=$3; shift 3
@@ -173,10 +174,12 @@ plan() {
 			vars=$(jq -c --arg grpc "$grpc" --arg nginx "$nginx" --arg alpine "$minor" --arg base "$base" \
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
-		for arch in amd64 arm64; do
-			plan_products=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --argjson vars "$vars" \
-				'. + [{version: $lane, os: $os, arch: $arch, vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_products")
-		done
+		if ! $patch; then
+			for arch in amd64 arm64; do
+				plan_products=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --argjson vars "$vars" \
+					'. + [{version: $lane, os: $os, arch: $arch, vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_products")
+			done
+		fi
 
 		# every publish is permanent, so only stale targets are rebuilt; an older patch never gains targets it was not published with
 		if ! $all || $patch; then
@@ -245,15 +248,15 @@ for key in "${selected[@]}"; do
 	plan "$key" "$key" "$php_tag" alpine trixie
 	lanes=$plan_lanes merges=$plan_merges products=$plan_products
 
-	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check; products past 256 lanes are not kept cached
+	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check
 	while read -r older os; do
 		[ "php-$older" != "$php_tag" ] || continue
 		plan "$key" "$older" "php-$older" "$os"
-		products=$(jq -c --argjson p "$plan_products" '(. + $p)[:256]' <<<"$products")
 		l=$(jq -c --argjson p "$plan_lanes" '. + $p' <<<"$lanes")
 		m=$(jq -c --argjson p "$plan_merges" '. + $p' <<<"$merges")
-		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ]; then
-			lanes=$l merges=$m
+		p=$(jq -c --argjson p "$plan_lanes" '. + ($p | map(del(.targets)))' <<<"$products")
+		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ] && [ "$(jq length <<<"$p")" -le 256 ]; then
+			lanes=$l merges=$m products=$p
 		else
 			log "deferred, matrix full: $older $os"
 		fi
