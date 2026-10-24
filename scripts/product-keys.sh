@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 arch=${PLATFORMS:-}
 arch=${arch#linux/}
-[ -n "$arch" ] && [ -n "${NGINX_BASE_DIGEST:-}" ] || { echo "PLATFORMS and NGINX_BASE_DIGEST are required" >&2; exit 64; }
+if [ -z "$arch" ] || [ -z "${NGINX_BASE_DIGEST:-}" ]; then echo "PLATFORMS and NGINX_BASE_DIGEST are required" >&2; exit 64; fi
 
 targets=$(docker buildx bake -f docker-bake.hcl -f versions.json --print products | jq -c .target)
 arg() { jq -r --arg t "product-$1" --arg a "$2" '.[$t].args[$a | ascii_upcase] // ""' <<<"$targets"; }
