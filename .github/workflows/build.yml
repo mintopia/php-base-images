@@ -24,11 +24,6 @@ on:
         type: choice
         options: [all, alpine, trixie]
         default: all
-      php_source:
-        description: Build PHP from php-src tags (src, default) or official php images (upstream)
-        type: choice
-        options: [versions.json, upstream, src]
-        default: versions.json
 
 permissions:
   contents: read
@@ -71,7 +66,6 @@ jobs:
           FORCE: ${{ inputs.force }}
           ONLY_PHP: ${{ inputs.php_version }}
           ONLY_OS: ${{ inputs.os }}
-          SOURCE: ${{ inputs.php_source }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=()
@@ -87,7 +81,6 @@ jobs:
           esac
           [ -z "$ONLY_PHP" ] || args+=(--php "$ONLY_PHP")
           [ -z "$ONLY_OS" ] || [ "$ONLY_OS" = all ] || args+=(--os "$ONLY_OS")
-          [ -z "$SOURCE" ] || [ "$SOURCE" = versions.json ] || args+=(--source "$SOURCE")
           scripts/resolve-matrix.sh "${args[@]}"
 
   php:
@@ -100,17 +93,19 @@ jobs:
         version: ${{ fromJSON(needs.resolve.outputs.versions) }}
     permissions:
       contents: read
+      actions: write
       packages: write
       id-token: write
     uses: ./.github/workflows/lanes.yml
     with:
       lanes: ${{ toJSON(fromJSON(needs.resolve.outputs.plans)[matrix.version].lanes) }}
       merges: ${{ toJSON(fromJSON(needs.resolve.outputs.plans)[matrix.version].merges) }}
+      products: ${{ toJSON(fromJSON(needs.resolve.outputs.plans)[matrix.version].products) }}
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   site:
-    needs: php
+    needs: [resolve, php]
     if: ${{ !cancelled() && github.event_name != 'pull_request' }}
     permissions:
       contents: write
@@ -119,4 +114,5 @@ jobs:
       id-token: write
     uses: ./.github/workflows/site.yml
     with:
-      records: ${{ needs.php.result == 'success' || needs.php.result == 'failure' }}
+      # php runs on every non-PR run for the build products, so only planned merges mean records
+      records: ${{ (needs.php.result == 'success' || needs.php.result == 'failure') && contains(needs.resolve.outputs.plans, '"variant"') }}

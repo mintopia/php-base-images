@@ -20,7 +20,7 @@ This README covers the codebase and the [environment variable reference](#config
 ```
 versions.json          # the Matrix file: PHP versions, OSes, extensions, dropped 8.6 extensions
 docker-bake.hcl        # build targets per Variant
-alpine.Dockerfile      # Alpine images, on php-src or official php images
+alpine.Dockerfile      # Alpine images
 trixie.Dockerfile      # Debian trixie images
 php-src.Dockerfile     # compiles PHP from a php-src tag
 build/                 # build-time scripts: extensions, grpc, FrankenPHP, docker-php-* helpers
@@ -37,7 +37,6 @@ site/                  # the Astro site at php.mintopia.net
 PHP_TAG=$(scripts/resolve-php-tag.sh 8.5) docker buildx bake -f docker-bake.hcl -f versions.json   # 8.5 alpine, all targets
 PHP_VERSION=8.4 OS=trixie PHP_TAG=$(scripts/resolve-php-tag.sh 8.4) docker buildx bake -f docker-bake.hcl -f versions.json cli
 PHP_VERSION=8.6 PHP_TAG=$(scripts/resolve-php-tag.sh 8.6 --unstable) docker buildx bake -f docker-bake.hcl -f versions.json cli
-PHP_SOURCE=upstream docker buildx bake -f docker-bake.hcl -f versions.json cli                   # on official php images
 tests/smoke.sh php:8.5-alpine-cli cli
 ```
 
@@ -51,11 +50,12 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Each site build lists every recorded build's CVEs and flags the critical ones. OS package CVEs come from a Trivy scan of the build's SBOM, and PHP CVEs from php-src's security advisories.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - The workflow signs published manifests with keyless cosign. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
-- Lanes push per-arch images and BuildKit cache to `ghcr.io/mintopia/php-base-images-cache`, and the merge job copies only the finished multi-arch image into `php` or `nginx`. Published images are never deleted, so superseded `@sha256:` digests keep resolving. [php-base-images-cache](https://github.com/mintopia/php-base-images-cache) cleans up the cache package.
+- Each lane first restores its build products (compiled PHP, FrankenPHP and the PIE and grpc extensions) from the GitHub Actions cache, and builds any that are missing. A `products` job before the lanes keeps every lane's products cached, rebuilding them after 30 days. There is no BuildKit registry cache.
+- Lanes push untagged per-arch images by digest to `php` or `nginx`. The merge job makes the multi-arch image from them and then deletes the per-arch index it consumed. Published images are never deleted, so superseded `@sha256:` digests keep resolving. See `docs/decisions/0023-build-product-cache.md`.
 
 ### PHP source
 
-CI compiles PHP from the latest php-src tag for each minor version, using RCs for unstable versions, so a release ships as soon as php-src tags it. To build a version on the official `php` images instead, set `"source": "upstream"` on it in `versions.json`, or run the workflow with `php_source: upstream`. `php_source: src` forces compiling from php-src, and `php_source: versions.json` follows the file. Tags are the same either way. See `docs/decisions/0008-php-src-default.md`.
+CI compiles PHP from the latest php-src tag for each minor version, using RCs for unstable versions, so a release ships as soon as php-src tags it. The official `php` images are not used. See `docs/decisions/0023-build-product-cache.md`.
 
 To avoid Docker Hub rate limits, set the optional repo variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`.
 

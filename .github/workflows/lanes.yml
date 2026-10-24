@@ -1,6 +1,6 @@
 name: lanes
 
-# one PHP version's builds and merges; build.yml calls this once per versions.json key
+# one PHP version's build products, builds and merges; build.yml calls this once per versions.json key
 on:
   workflow_call:
     inputs:
@@ -8,6 +8,9 @@ on:
         type: string
         required: true
       merges:
+        type: string
+        required: true
+      products:
         type: string
         required: true
     secrets:
@@ -18,13 +21,138 @@ permissions:
   contents: read
 
 env:
-  # per-arch images and BuildKit cache; only finished multi-arch images go to php/nginx
-  CACHE_IMAGE: ghcr.io/mintopia/php-base-images-cache
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
+  # keeps every lane's build products in the Actions cache (ADR 0023); only main saves, so pull requests read main's
+  products:
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.products != '[]' }}
+    name: products ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(inputs.products) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Bake variables
+        env:
+          VARS: ${{ toJSON(matrix.vars) }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/product-keys.sh | tee keys >> "$GITHUB_OUTPUT"
+          scripts/product-plan.sh < keys | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' php ')
+        with:
+          path: products/php
+          key: ${{ steps.plan.outputs.php }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' frankenphp ')
+        with:
+          path: products/frankenphp
+          key: ${{ steps.plan.outputs.frankenphp }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-grpc ')
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.plan.outputs.ext-grpc }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-redis ')
+        with:
+          path: products/ext-redis
+          key: ${{ steps.plan.outputs.ext-redis }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-apcu ')
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.plan.outputs.ext-apcu }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-mongodb ')
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.plan.outputs.ext-mongodb }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-opentelemetry ')
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.plan.outputs.ext-opentelemetry }}
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-protobuf ')
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.plan.outputs.ext-protobuf }}
+      - name: Build
+        env:
+          BUILD: ${{ steps.plan.outputs.build }}
+        run: |
+          read -ra build <<<"$BUILD"
+          [ ${#build[@]} -gt 0 ] || exit 0
+          PRODUCTS=$(find products -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null || true)
+          export PRODUCTS
+          jq -n '{target: ($ARGS.positional | map({key: "product-\(.)", value: {output: ["type=local,dest=products/\(.)"]}}) | from_entries)}' \
+            --args "${build[@]}" > outputs.json
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json "${build[@]/#/product-}"
+          du -sh "${build[@]/#/products/}"
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' php ')
+        with:
+          path: products/php
+          key: ${{ steps.plan.outputs.php }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' frankenphp ')
+        with:
+          path: products/frankenphp
+          key: ${{ steps.plan.outputs.frankenphp }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-grpc ')
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.plan.outputs.ext-grpc }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-redis ')
+        with:
+          path: products/ext-redis
+          key: ${{ steps.plan.outputs.ext-redis }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-apcu ')
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.plan.outputs.ext-apcu }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-mongodb ')
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.plan.outputs.ext-mongodb }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-opentelemetry ')
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.plan.outputs.ext-opentelemetry }}
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-protobuf ')
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.plan.outputs.ext-protobuf }}
+
   build:
+    needs: products
+    if: ${{ !cancelled() && inputs.lanes != '[]' }}
     name: build ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 90
@@ -58,6 +186,51 @@ jobs:
         env:
           VARS: ${{ toJSON(matrix.vars) }}
         run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - id: keys
+        run: scripts/product-keys.sh | tee -a "$GITHUB_OUTPUT"
+      # a product missing from the cache is built inline
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.php != ''
+        with:
+          path: products/php
+          key: ${{ steps.keys.outputs.php }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.frankenphp != ''
+        with:
+          path: products/frankenphp
+          key: ${{ steps.keys.outputs.frankenphp }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-grpc != ''
+        with:
+          path: products/ext-grpc
+          key: ${{ steps.keys.outputs.ext-grpc }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-redis != ''
+        with:
+          path: products/ext-redis
+          key: ${{ steps.keys.outputs.ext-redis }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-apcu != ''
+        with:
+          path: products/ext-apcu
+          key: ${{ steps.keys.outputs.ext-apcu }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-mongodb != ''
+        with:
+          path: products/ext-mongodb
+          key: ${{ steps.keys.outputs.ext-mongodb }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-opentelemetry != ''
+        with:
+          path: products/ext-opentelemetry
+          key: ${{ steps.keys.outputs.ext-opentelemetry }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-protobuf != ''
+        with:
+          path: products/ext-protobuf
+          key: ${{ steps.keys.outputs.ext-protobuf }}
+      - name: Restored products
+        run: echo "PRODUCTS=$(find products -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null || true)" | tee -a "$GITHUB_ENV"
       # loaded without attestations: the docker exporter can't load an index
       - name: Build
         run: |
@@ -65,7 +238,7 @@ jobs:
           jq -n --arg prefix "php:$PHP_VERSION-$OS-" \
             '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: ["type=docker,name=\($prefix)\(.)"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
-          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json --set '*.cache-to=' "${targets[@]}"
+          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json "${targets[@]}"
       - name: Smoke test
         run: |
           for t in $TARGETS; do
@@ -83,21 +256,29 @@ jobs:
             [ "$t" = nginx ] || docker run --rm --entrypoint php "php:$PHP_VERSION-$OS-$t" -m > "digests/modules-$t"
           done
       # same builder, so every layer is cached; only attestations and the push are new
+      # untagged per-arch indexes go straight into php/nginx; merge deletes them once it has made the multi-arch index
       - name: Push by digest
         if: env.PUBLISH == 'true'
         run: |
           read -ra targets <<<"$TARGETS"
-          jq -n --arg push "type=image,name=$CACHE_IMAGE,push-by-digest=true,name-canonical=true,push=true" \
-            '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: [$push]}}) | from_entries)}' \
+          jq -n '{target: ($ARGS.positional | map({key: ., value: {tags: [],
+              output: ["type=image,name=ghcr.io/mintopia/\(if . == "nginx" then "nginx" else "php" end),push-by-digest=true,name-canonical=true,push=true"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
-          docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json \
-            --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}"
+          # GHCR allows 2000 requests/minute across all lanes pushing at once
+          for i in 1 2 3; do
+            docker buildx bake -f docker-bake.hcl -f versions.json -f outputs.json \
+              --provenance=mode=max --sbom=true --metadata-file meta.json "${targets[@]}" && break
+            [ "$i" = 3 ] && exit 1
+            sleep $((i * 60))
+          done
       - name: Record digests
         if: env.PUBLISH == 'true'
         run: |
           for t in $TARGETS; do
+            image=ghcr.io/mintopia/php
+            [ "$t" != nginx ] || image=ghcr.io/mintopia/nginx
             d=$(jq -re --arg t "$t" '.[$t]["containerimage.digest"]' meta.json)
-            docker buildx imagetools inspect "$CACHE_IMAGE@$d" > /dev/null
+            docker buildx imagetools inspect "$image@$d" > /dev/null
             echo "$d" > "digests/$t"
           done
       - uses: actions/upload-artifact@v7
@@ -115,11 +296,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
     strategy:
       fail-fast: false
-      # cross-package copies make many registry requests; GHCR allows 2000/minute across every PHP version's merges
+      # GHCR allows 2000 requests a minute across every PHP version's merges
       max-parallel: 2
       matrix:
         include: ${{ fromJSON(inputs.merges) }}
@@ -152,7 +334,7 @@ jobs:
           php=""
           for arch in amd64 arm64; do
             dir="digests/digests-$VERSION-$OS-$arch"
-            refs+=("$CACHE_IMAGE@$(cat "$dir/$VARIANT")")
+            refs+=("$image@$(cat "$dir/$VARIANT")")
             v=$(cat "$dir/php-version")
             [ -z "$php" ] || [ "$php" = "$v" ] || { echo "::error::PHP $php on one arch, $v on another"; exit 1; }
             php=$v
@@ -195,3 +377,42 @@ jobs:
           path: record/
           if-no-files-found: error
           retention-days: 1
+      # shortcut: deleted only here, so a failed or abandoned run leaves its per-arch indexes untagged in php/nginx
+      # only the per-arch index: its platform image and attestations are now children of the multi-arch index
+      - name: Delete per-arch indexes
+        env:
+          VERSION: ${{ matrix.version }}
+          OS: ${{ matrix.os }}
+          VARIANT: ${{ matrix.variant }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          package=php
+          [ "$VARIANT" != nginx ] || package=nginx
+          versions=/users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions
+          # versions are listed newest first; this run's pushes are no older than its start
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -q .run_started_at) \
+            || started=$(date -u -d '-6 hours' +%FT%TZ)
+          for arch in amd64 arm64; do
+            digest=$(cat "digests/digests-$VERSION-$OS-$arch/$VARIANT")
+            match() { jq -r --arg d "$digest" '.[] | select(.name == $d and (.metadata.container.tags | length) == 0) | .id' <<<"$1"; }
+            id='' list=''
+            # a new push takes a moment to be listed, so page 1 is retried
+            for _ in 1 2 3; do
+              list=$(gh api "$versions?per_page=100&page=1") || { list=''; break; }
+              id=$(match "$list")
+              [ -z "$id" ] || break
+              sleep 5
+            done
+            page=1
+            while [ -z "$id" ] && [ -n "$list" ] \
+              && jq -e --arg s "$started" 'length == 100 and .[-1].created_at >= $s' <<<"$list" > /dev/null; do
+              page=$((page + 1))
+              list=$(gh api "$versions?per_page=100&page=$page") || list=''
+              id=$(match "$list")
+            done
+            if [ -z "$id" ]; then
+              echo "::warning::$package@$digest not found, left in place"
+            else
+              gh api -X DELETE "$versions/$id" > /dev/null || echo "::warning::could not delete $package@$digest ($id)"
+            fi
+          done

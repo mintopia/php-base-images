@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { echo "usage: $0 [--all] [--php VERSION] [--os OS] [--arch ARCH] [--source upstream|src] [--no-patches]" >&2; exit 64; }
+usage() { echo "usage: $0 [--all] [--php VERSION] [--os OS] [--arch ARCH] [--no-patches]" >&2; exit 64; }
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-all=false patches=true only_php='' only_os='' only_arch='' only_source=''
+all=false patches=true only_php='' only_os='' only_arch=''
 while [ $# -gt 0 ]; do
 	case $1 in
 		--all) all=true ;;
@@ -12,7 +12,6 @@ while [ $# -gt 0 ]; do
 		--php) only_php=${2:?}; shift ;;
 		--os) only_os=${2:?}; shift ;;
 		--arch) only_arch=${2:?}; shift ;;
-		--source) only_source=${2:?}; shift ;;
 		*) usage ;;
 	esac
 	shift
@@ -91,8 +90,9 @@ mongodb=$(packagist mongodb/mongodb-extension)
 otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
-common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
-	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
+pie=$(github_release php/pie)
+common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg pie "$pie" --arg stamp "$(date -u +%F)" \
+	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PIE_VERSION: $pie, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -114,10 +114,9 @@ done
 
 expected_labels() {
 	jq -c -n --arg v "$1" --argjson vars "$2" --argjson exts "$3" '
-		($vars.PHP_SOURCE == "src" and $v != "nginx") as $src
+		($v != "nginx") as $src
 		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", mongodb: "MONGODB_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
-		| {cli: "ZTS_DIGEST", frankenphp: "FRANKENPHP_DIGEST", "php-fpm": "FPM_DIGEST", "php-fpm-nginx": "FPM_DIGEST", nginx: "NGINX_BASE_DIGEST"} as $base
-		| {"org.opencontainers.image.base.digest": $vars[if $src then "NGINX_BASE_DIGEST" else $base[$v] end]}
+		| {"org.opencontainers.image.base.digest": $vars.NGINX_BASE_DIGEST}
 		+ (if $src then {"net.mintopia.php.source": "php-src", "net.mintopia.php.tag": $vars.PHP_TAG} else {} end)
 		+ (if $src and $v == "frankenphp" and $vars.FRANKENPHP_SRC_VERSION then {"net.mintopia.frankenphp.version": $vars.FRANKENPHP_SRC_VERSION} else {} end)
 		+ (if $v == "nginx" then {} else [$exts[] | select($ev[.]) | {key: "net.mintopia.ext.\(.).version", value: $vars[$ev[.]]}] | from_entries end)
@@ -136,58 +135,50 @@ published_patches() {
 }
 
 frankenphp_src=''
-# plan <versions.json key> <lane> <php source> <php-src tag> <os...>: sets plan_lanes and plan_merges
+# plan <versions.json key> <lane> <php-src tag> <os...>: sets plan_lanes, plan_merges and plan_products
+# plan_products has the current lane on every arch, stale or not, so the products job keeps its build products cached;
+# an older patch only gets products for the lanes it builds, so they are saved but may be evicted when idle
 # lane is the key for the current patch, or X.Y.Z for an older patch that keeps only its own tags
 plan() {
-	local key=$1 lane=$2 php_source=$3 php_tag=$4; shift 4
-	local patch=false version tag exts stable src_vars fp sha os targets frankenphp zts fpm vars image minor grpc nginx base
+	local key=$1 lane=$2 php_tag=$3; shift 3
+	local patch=false version exts stable src_vars fp sha os targets vars minor grpc nginx base
 	local stale rebuild t ref reasons published exp arch diff cves built
 	[ "$lane" = "$key" ] || patch=true
-	plan_lanes='[]' plan_merges='[]'
+	plan_lanes='[]' plan_merges='[]' plan_products='[]'
 	version=$(jq -c --arg k "$key" '.[$k]' <<<"$matrix")
-	tag=$(jq -r .tag <<<"$version")
 	exts=$(jq -c .extensions <<<"$version")
 	stable=$(jq -r .stable <<<"$version")
-	src_vars='{"PHP_SOURCE": "upstream"}'
-	if [ "$php_source" = src ]; then
-		src_vars=$(jq -c -n --arg t "$php_tag" '{PHP_SOURCE: "src", PHP_TAG: $t}')
-		if [ "$(jq -r .frankenphp <<<"$version")" = true ]; then
-			if [ -z "$frankenphp_src" ]; then
-				fp=$(github_release php/frankenphp)
-				# pins the tarball the build fetches to the one seen here
-				sha=$(safe "$(curl -fsSL --retry 3 "https://github.com/php/frankenphp/archive/refs/tags/v$fp.tar.gz" | sha256sum | cut -d' ' -f1)")
-				frankenphp_src=$(jq -c -n --arg v "$fp" --arg s "$sha" '{FRANKENPHP_SRC_VERSION: $v, FRANKENPHP_SRC_SHA256: $s}')
-			fi
-			src_vars=$(jq -c --argjson fp "$frankenphp_src" '. + $fp' <<<"$src_vars")
+	src_vars=$(jq -c -n --arg t "$php_tag" '{PHP_TAG: $t}')
+	if [ "$(jq -r .frankenphp <<<"$version")" = true ]; then
+		if [ -z "$frankenphp_src" ]; then
+			fp=$(github_release php/frankenphp)
+			# pins the tarball the build fetches to the one seen here
+			sha=$(safe "$(curl -fsSL --retry 3 "https://github.com/php/frankenphp/archive/refs/tags/v$fp.tar.gz" | sha256sum | cut -d' ' -f1)")
+			frankenphp_src=$(jq -c -n --arg v "$fp" --arg s "$sha" '{FRANKENPHP_SRC_VERSION: $v, FRANKENPHP_SRC_SHA256: $s}')
 		fi
+		src_vars=$(jq -c --argjson fp "$frankenphp_src" '. + $fp' <<<"$src_vars")
 	fi
 	for os in "$@"; do
 		[ -n "${os_vars[$os]:-}" ] || continue
 		jq -e --arg os "$os" '.os | index($os)' <<<"$version" >/dev/null || continue
 		targets=(cli php-fpm php-fpm-nginx)
-		frankenphp=''
-		if [ "$(jq -r .frankenphp <<<"$version")" = true ]; then
-			targets+=(frankenphp)
-			[ "$php_source" = src ] || frankenphp=$(digest "dunglas/frankenphp:1-php$tag-$os")
-		fi
+		[ "$(jq -r .frankenphp <<<"$version")" != true ] || targets+=(frankenphp)
 		$patch || [ "$key" != "$nginx_key" ] || targets+=(nginx)
-		zts='' fpm=''
-		if [ "$php_source" != src ]; then
-			zts=$(digest "php:$tag-zts-$os")
-			fpm=$(digest "php:$tag-fpm-$os")
-		fi
-		vars=$(jq -c --arg key "$key" --arg zts "$zts" --arg fpm "$fpm" --arg fp "$frankenphp" --argjson src "$src_vars" \
-			'. + {PHP_VERSION: $key, ZTS_DIGEST: $zts, FPM_DIGEST: $fpm, FRANKENPHP_DIGEST: $fp} + $src' <<<"${os_vars[$os]}")
+		vars=$(jq -c --arg key "$key" --argjson src "$src_vars" '. + {PHP_VERSION: $key} + $src' <<<"${os_vars[$os]}")
 		if [ "$os" = alpine ]; then
-			# php images can lag alpine:3; grpc.sh asserts the distro grpc version
-			image=php:$tag-zts-alpine@$zts
-			[ "$php_source" != src ] || image=alpine:3@$(digest alpine:3)
-			minor=$(safe "$(docker run --rm -q "$image" cut -d. -f1,2 /etc/alpine-release)")
+			# grpc.sh asserts the distro grpc version
+			minor=$(safe "$(docker run --rm -q "alpine:3@$(digest alpine:3)" cut -d. -f1,2 /etc/alpine-release)")
 			grpc=$(apk_version "https://dl-cdn.alpinelinux.org/alpine/v$minor/community/x86_64/APKINDEX.tar.gz" grpc-dev)
 			nginx=$(apk_version "https://nginx.org/packages/alpine/v$minor/main/x86_64/APKINDEX.tar.gz" nginx)
 			base=$(digest "alpine:$minor")
 			vars=$(jq -c --arg grpc "$grpc" --arg nginx "$nginx" --arg alpine "$minor" --arg base "$base" \
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
+		fi
+		if ! $patch; then
+			for arch in amd64 arm64; do
+				plan_products=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --argjson vars "$vars" \
+					'. + [{version: $lane, os: $os, arch: $arch, vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_products")
+			done
 		fi
 
 		# every publish is permanent, so only stale targets are rebuilt; an older patch never gains targets it was not published with
@@ -233,7 +224,7 @@ plan() {
 		for arch in "${archs[@]}"; do
 			plan_lanes=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --arg targets "${targets[*]}" --argjson vars "$vars" \
 				'. + [{version: $lane, os: $os, arch: $arch, targets: $targets,
-					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php-base-images-cache:\($lane)-\($os)-\($arch)"})}]' <<<"$plan_lanes")
+					vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_lanes")
 		done
 
 		[ ${#archs[@]} -eq 2 ] || continue
@@ -251,34 +242,32 @@ patch_tags=''
 plans='{}'
 for key in "${selected[@]}"; do
 	stable=$(jq -r --arg k "$key" '.[$k].stable' <<<"$matrix")
-	php_source=${only_source:-$(jq -r --arg k "$key" '.[$k].source // "src"' <<<"$matrix")}
-	[[ $php_source =~ ^(upstream|src)$ ]] || { log "$key: source must be upstream or src, got '$php_source'"; exit 1; }
 	unstable=()
 	[ "$stable" = true ] || unstable=(--unstable)
 	php_tag=$(safe "$("$root/scripts/resolve-php-tag.sh" "$key" "${unstable[@]}")")
-	plan "$key" "$key" "$php_source" "$php_tag" alpine trixie
-	lanes=$plan_lanes merges=$plan_merges
+	plan "$key" "$key" "$php_tag" alpine trixie
+	lanes=$plan_lanes merges=$plan_merges products=$plan_products
 
-	# older patches build from php-src: upstream stops refreshing an image once its patch is superseded
 	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check
 	while read -r older os; do
 		[ "php-$older" != "$php_tag" ] || continue
-		plan "$key" "$older" src "php-$older" "$os"
+		plan "$key" "$older" "php-$older" "$os"
 		l=$(jq -c --argjson p "$plan_lanes" '. + $p' <<<"$lanes")
 		m=$(jq -c --argjson p "$plan_merges" '. + $p' <<<"$merges")
-		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ]; then
-			lanes=$l merges=$m
+		p=$(jq -c --argjson p "$plan_lanes" '. + ($p | map(del(.targets)))' <<<"$products")
+		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ] && [ "$(jq length <<<"$p")" -le 256 ]; then
+			lanes=$l merges=$m products=$p
 		else
 			log "deferred, matrix full: $older $os"
 		fi
 	done < <(awk -v k="$key" 'split($1, a, ".") == 3 && a[1] "." a[2] == k' <<<"$patch_tags" | sort -rV)
 
-	[ "$lanes" = '[]' ] || plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" '. + {($k): {lanes: $l, merges: $m}}' <<<"$plans")
+	plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" --argjson p "$products" '. + {($k): {lanes: $l, merges: $m, products: $p}}' <<<"$plans")
 done
 
 if [ -z "${GITHUB_OUTPUT:-}" ]; then
 	jq . <<<"$plans"
 else
 	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; } >> "$GITHUB_OUTPUT"
-	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges") | join("; ")' <<<"$plans")"
+	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges, \(.value.products | length) product lanes") | join("; ")' <<<"$plans")"
 fi
