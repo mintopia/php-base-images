@@ -80,6 +80,7 @@ case "$target" in
 			|| fail "PUID/PGID not applied"
 		[ "$(docker run --rm "$image" pwd):$(docker run --rm -e APP_ROOT=/tmp "$image" pwd)" = /app:/tmp ] || fail "APP_ROOT not the working directory"
 		[ "$(docker run --rm "${hardened[@]}" -e PGID=1001 "$image" sh -c 'echo $(id -u):$(id -g)')" = 1000:1001 ] || fail "PUID under --read-only --cap-drop ALL"
+		docker run --rm "${hardened[@]}" --tmpfs /tmp "$image" sh -c 'touch "$HOME/.probe"' || fail "HOME not writable under --read-only as PUID"
 		[ "$(docker run --rm "$image" php -r 'echo ini_get("display_errors");'):$(docker run --rm -e PHP_INI_MODE=development "$image" php -r 'echo ini_get("display_errors");')" = ":1" ] \
 			|| fail "PHP_INI_MODE not applied"
 		! docker run --rm -e PHP_INI_MODE=bogus "$image" true 2>/dev/null || fail "invalid PHP_INI_MODE accepted"

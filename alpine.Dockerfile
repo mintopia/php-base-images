@@ -69,6 +69,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY rootfs/common/ rootfs/php/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -98,6 +99,7 @@ RUN --mount=type=bind,from=ext-builder-zts,source=/runtime-deps,target=/tmp/runt
     && setpriv --bounding-set=-all "$f" version
 COPY rootfs/common/ rootfs/php/ rootfs/frankenphp/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
@@ -124,6 +126,7 @@ RUN --mount=type=bind,from=ext-builder-fpm,source=/runtime-deps,target=/tmp/runt
     && rm /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/www.conf.default
 COPY rootfs/common/ rootfs/php/ rootfs/php-fpm/ /
 ENV APP_ROOT=/app \
+    HOME=/tmp \
     PHP_MEMORY_LIMIT=256M \
     PHP_UPLOAD_MAX_FILESIZE=32M \
     PHP_POST_MAX_SIZE=32M \
