@@ -20,14 +20,11 @@ One (PHP version, OS, architecture) triple. The unit of CI work: one job builds 
 **Matrix file**:
 The single checked-in file listing supported PHP versions, their stability, their OS list and their extension list. Sole source of truth for what gets built.
 
-**Extension builder**:
-The shared stage that compiles every PHP extension for a Lane once, for all Targets to copy from.
-
 **Bundled extension**:
 An extension shipped in the PHP source tree (bcmath, pcntl, pdo_*, gd, snmp). Installed with the extension installer script.
 
 **PIE extension**:
-An extension distributed via Packagist and installed with PIE (opentelemetry, protobuf, redis). Unofficial Packagist mirrors are acceptable. grpc is the exception: built in-tree against the OS libgrpc.
+An extension distributed via Packagist and installed with PIE (apcu, mongodb, opentelemetry, protobuf, redis). Unofficial Packagist mirrors are acceptable. grpc is the exception: built in-tree against the OS libgrpc.
 
 **Stable**:
 A PHP minor line with a GA release. Only Stable lines receive the `latest`, `8`, and version-less default tags.
@@ -65,4 +62,4 @@ The files of one slow build step for one PHP tag, OS and arch (`php`, `frankenph
 A run with `--all` that rebuilds every Lane regardless of upstream changes: a push that changes an image input, `force`, or a pull request.
 
 **Trusted proxy**:
-A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0012.
+A proxy or load balancer whose address is in `TRUSTED_PROXIES`. Only requests connecting from one have their forwarded headers believed; see ADR 0008.

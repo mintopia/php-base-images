@@ -51,11 +51,11 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - The workflow signs published manifests with keyless cosign. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 - Each lane first restores its build products (compiled PHP, FrankenPHP and the PIE and grpc extensions) from the GitHub Actions cache, and builds any that are missing. A `products` job before the lanes keeps every lane's products cached, rebuilding them after 30 days. There is no BuildKit registry cache.
-- Lanes push untagged per-arch images by digest to `php` or `nginx`. The merge job makes the multi-arch image from them and then deletes the per-arch index it consumed. Published images are never deleted, so superseded `@sha256:` digests keep resolving. See `docs/decisions/0023-build-product-cache.md`.
+- Lanes push untagged per-arch images by digest to `php` or `nginx`. The merge job makes the multi-arch image from them and then deletes the per-arch index it consumed. Published images are never deleted, so superseded `@sha256:` digests keep resolving. See `docs/decisions/0025-per-arch-digests-merged-into-index.md`.
 
 ### PHP source
 
-CI compiles PHP from the latest php-src tag for each minor version, using RCs for unstable versions, so a release ships as soon as php-src tags it. The official `php` images are not used. See `docs/decisions/0023-build-product-cache.md`.
+CI compiles PHP from the latest php-src tag for each minor version, using RCs for unstable versions, so a release ships as soon as php-src tags it. The official `php` images are not used. See `docs/decisions/0001-php-src-builds.md`.
 
 To avoid Docker Hub rate limits, set the optional repo variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`.
 

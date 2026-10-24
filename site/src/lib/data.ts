@@ -223,7 +223,7 @@ export interface Commit {
   subject: string;
 }
 
-// igbinary was never in a listed build (ADR 0017); null hides the commit
+// igbinary was never in a listed build (ADR 0013); null hides the commit
 const SUBJECTS: Record<string, string | null> = {
   a146abfa53b6ed9ce061cce326fc2a41ac4146b7: null,
   '601b64058c81c6d1f1d07d0fdb7316780be0edc6': null,
@@ -280,6 +280,7 @@ export function extensionVersion(version: string, ext: string) {
   return new Set(byOs.map(([, v]) => v)).size === 1 ? byOs[0][1] : byOs.map(([os, v]) => `${v} ${os}`).join(' · ');
 }
 
+export const siteBuilt = new Date().toISOString();
 export const repoUrl = 'https://github.com/mintopia/php-base-images';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

@@ -25,7 +25,7 @@ env:
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
-  # keeps every lane's build products in the Actions cache (ADR 0023); only main saves, so pull requests read main's
+  # keeps every lane's build products in the Actions cache (ADR 0024); only main saves, so pull requests read main's
   products:
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.products != '[]' }}
     name: products ${{ matrix.version }}-${{ matrix.os }}-${{ matrix.arch }}

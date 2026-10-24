@@ -34,10 +34,10 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
       const php = cli(v)?.current?.php;
       return (
         <div class="ref" data-for={v} hidden={v !== latestStable}>
-          <code class="ref-tag">{ref.split(/(?<=[/:])/).map((part) => <Fragment>{part}<wbr /></Fragment>)}</code>
+          <code class="ref-tag">ghcr.io/<wbr />mintopia/<wbr />php:<wbr /><span data-flap>{alias(v)}</span></code>
           <Copy text={ref} label="Copy reference" primary />
           <p class="ref-meta">
-            {php ? <span class="mono">PHP {php}</span> : <span>PHP {v}</span>}
+            {php ? <span class="mono">PHP <span data-flap>{php}</span></span> : <span>PHP {v}</span>}
             <span>alpine · cli · {ARCHES.join(' + ')}</span>
             {!versions[v].stable && <span>Release candidate, best effort</span>}
             {cli(v) && <a href={imagePath(cli(v)!)}>Choose OS and variant</a>}
@@ -95,10 +95,38 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
 </style>
 
 <script>
+  // split-flap roll: each cell steps through its alphabet to the target, left cells settling first
+  const DIGITS = '0123456789';
+  const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+  const rolling = new WeakMap<HTMLElement, symbol>();
+  const roll = (el: HTMLElement) => {
+    const target = el.dataset.flap ||= el.textContent!;
+    const token = Symbol();
+    rolling.set(el, token);
+    const cells = [...target].map((ch, i) => {
+      const set = DIGITS.includes(ch) ? DIGITS : LETTERS.includes(ch) ? LETTERS : '';
+      return { ch, set, at: set.indexOf(ch), steps: set ? 3 + i : 0 };
+    });
+    const total = Math.max(...cells.map((c) => c.steps));
+    let n = 0;
+    const tick = () => {
+      if (rolling.get(el) !== token) return;
+      el.textContent = cells.map((c) => {
+        const left = c.steps - n;
+        return left > 0 ? c.set[(c.at - left + c.set.length * 4) % c.set.length] : c.ch;
+      }).join('');
+      if (n++ < total) setTimeout(tick, 38);
+    };
+    tick();
+  };
+
   const start = document.getElementById('start')!;
   start.addEventListener('change', (e) => {
     const v = (e.target as HTMLInputElement).value;
     start.dataset.line = v;
-    start.querySelectorAll<HTMLElement>('.ref').forEach((r) => (r.hidden = r.dataset.for !== v));
+    start.querySelectorAll<HTMLElement>('.ref').forEach((r) => {
+      r.hidden = r.dataset.for !== v;
+      if (!r.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) r.querySelectorAll<HTMLElement>('[data-flap]').forEach(roll);
+    });
   });
 </script>

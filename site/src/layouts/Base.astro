@@ -1,12 +1,12 @@
 ---
 import '../styles/site.css';
 import { Font } from 'astro:assets';
-import { versionKeys, repoUrl } from '../lib/data';
+import { versionKeys, repoUrl, fmtTime, siteBuilt as built } from '../lib/data';
 
 interface Props {
   title: string;
   description: string;
-  current?: 'home' | 'images' | 'matrix' | 'usage' | 'changelog';
+  current?: 'home' | 'images' | 'matrix' | 'usage' | 'changelog' | 'about';
 }
 const { title, description, current } = Astro.props;
 const base = import.meta.env.BASE_URL;
@@ -16,6 +16,7 @@ const nav = [
   ['matrix', 'Matrix', `${base}matrix/`],
   ['usage', 'Usage', `${base}usage/`],
   ['changelog', 'Changelog', `${base}changelog/`],
+  ['about', 'About', `${base}about/`],
 ] as const;
 ---
 <!doctype html>
@@ -57,6 +58,7 @@ const nav = [
     <footer class="site-footer">
       <span>Multi-arch PHP images on <code>ghcr.io/mintopia</code>.</span>
       <a href={repoUrl}>Source on GitHub</a>
+      <span>Site built <time class="mono" datetime={built}>{fmtTime(built)} UTC</time></span>
     </footer>
     <a class="to-top" href="#content">Back to top</a>
     <p class="sr-only" aria-live="polite" id="copy-status"></p>
@@ -69,19 +71,35 @@ const nav = [
       document.addEventListener('click', async (e) => {
         const btn = (e.target as Element).closest<HTMLButtonElement>('[data-copy]');
         if (!btn) return;
+        if (btn.hasAttribute('data-copied') || btn.hasAttribute('data-failed')) return;
         const status = document.getElementById('copy-status')!;
+        const label = btn.querySelector<HTMLElement>('.label')!;
+        const was = label.textContent;
+        // label turns over like a board flap; width held so the button doesn't jump
+        const show = (text: string) => {
+          label.textContent = text;
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) label.animate(
+            [{ transform: 'perspective(200px) rotateX(-90deg)', opacity: 0.3 }, { transform: 'none', opacity: 1 }],
+            { duration: 180, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          );
+        };
+        let state = 'copied';
         try {
           await navigator.clipboard.writeText(btn.dataset.copy!);
+          status.textContent = 'Copied';
         } catch {
+          state = 'failed';
           status.textContent = 'Copy failed. Select the text and copy it manually.';
-          return;
         }
-        if (btn.hasAttribute('data-copied')) return;
-        const label = btn.querySelector('.label')!;
-        const was = label.textContent;
-        label.textContent = status.textContent = 'Copied';
-        btn.dataset.copied = '';
-        setTimeout(() => { delete btn.dataset.copied; label.textContent = was; status.textContent = ''; }, 1400);
+        btn.style.minWidth = `${btn.offsetWidth}px`;
+        btn.setAttribute(`data-${state}`, '');
+        show(state === 'copied' ? 'Copied' : 'Copy failed');
+        setTimeout(() => {
+          btn.removeAttribute(`data-${state}`);
+          btn.style.minWidth = '';
+          status.textContent = '';
+          show(was!);
+        }, state === 'copied' ? 1400 : 2400);
       });
     </script>
   </body>

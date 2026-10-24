@@ -1,0 +1,231 @@
+---
+import Base from '../../layouts/Base.astro';
+import Bullet from '../../components/Bullet.astro';
+import { images, versions, versionKeys, latestStable, extensions, VARIANTS, ARCHES, repoUrl } from '../../lib/data';
+
+const base = import.meta.env.BASE_URL;
+const v = latestStable;
+const lines = [...versionKeys].reverse().map((k) => ({
+  key: k,
+  stable: versions[k].stable,
+  variants: VARIANTS.filter((t) => images.some((i) => i.version === k && i.variant === t)),
+  extensions: versions[k].extensions.length,
+}));
+const lanes = versionKeys.reduce((n, k) => n + versions[k].os.length * ARCHES.length, 0);
+
+const route = [
+  {
+    job: 'build',
+    where: `one job per PHP version, OS and arch: ${lanes} lanes, on native amd64 and arm64 runners`,
+    stops: [
+      ['Restore', 'PHP, FrankenPHP, grpc and the PIE extensions come from the GitHub Actions cache. Anything missing is compiled from source and cached for the next run.'],
+      ['Assemble', 'Every variant is built on one thread-safe (ZTS) PHP, compiled from the latest php-src tag. The official php images aren\'t used.'],
+      ['Smoke test', 'Every listed extension loads, PHP starts without warnings, the web variants serve a page, forwarded headers are believed only from trusted proxies, and the status pages answer.'],
+      ['Push', 'Only images that pass are pushed, untagged, with an SBOM and build provenance attached.'],
+    ],
+  },
+  {
+    job: 'merge',
+    where: 'one job per image',
+    stops: [
+      ['Join', 'The amd64 and arm64 images become one multi-arch image.'],
+      ['Tag and sign', 'Its tags move to it, and it is signed with keyless cosign.'],
+    ],
+  },
+  {
+    job: 'site',
+    where: 'after every run that publishes',
+    stops: [['Record', 'The build is recorded with its digest, versions and commit, and this site is rebuilt from the records.']],
+  },
+] as const;
+
+const skills = [
+  ["Matt Pocock's Skills", 'https://github.com/mattpocock/skills'],
+  ['Impeccable', 'https://impeccable.style/'],
+  ['Ponytail', 'https://github.com/DietrichGebert/ponytail'],
+  ['no-ai-slop', 'https://github.com/petergyang/no-ai-slop'],
+] as const;
+
+const toc = [
+  ['what', 'What gets built'],
+  ['build', 'How an image is built'],
+  ['rebuilds', 'When images are rebuilt'],
+  ['ai', 'AI disclosure'],
+  ['creator', 'About the creator'],
+] as const;
+---
+<Base title="About · mintopia/php" description="What the images are, how they are built and tested, and when they are rebuilt." current="about">
+  <div class="page about">
+    <header class="page-head">
+      <h1>About</h1>
+      <p>What gets built, how a build runs, and when an image is rebuilt.</p>
+    </header>
+
+    <div class="docs">
+      <nav class="toc" aria-label="On this page">
+        <div class="toc-list"><div>{toc.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}</div></div>
+      </nav>
+
+      <div class="docs-body prose">
+        <h2 id="what">What gets built</h2>
+        <p>{images.length} images, from the PHP versions below on Alpine and Debian trixie, each for amd64 and arm64.</p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="PHP versions">
+          <table class="roster">
+            <thead><tr><th scope="col">PHP</th><th scope="col">Variants</th><th scope="col">Extensions</th></tr></thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr>
+                  <th scope="row">
+                    <span class="line-id"><Bullet version={l.key} /><span class:list={['state', { rc: !l.stable }]}>{l.stable ? 'Stable' : 'Release candidate, best effort'}</span></span>
+                  </th>
+                  <td><span class="chips">{VARIANTS.map((t) => l.variants.includes(t) ? <span class="chip">{t}</span> : <span class="chip off"><span class="sr-only">no </span>{t}</span>)}</span></td>
+                  <td class="num"><span class="mono">{l.extensions}</span><span class="muted"> of {extensions.length}</span></td>
+                </tr>
+              ))}
+              <tr class="nginx-row">
+                <th scope="row"><span class="line-id"><span class="bullet nginx">nginx</span><span class="state">For php-fpm</span></span></th>
+                <td colspan="2"><span class="muted">One image per OS in <code>ghcr.io/mintopia/nginx</code>, to put in front of a <code>php-fpm</code> container.</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">Every patch release keeps its own tag, such as <code>{v}.13-php-fpm</code>, next to the moving <code>{v}-php-fpm</code>. The <a href={`${base}matrix/`}>Matrix</a> shows which extensions each version has, and why 8.6 leaves some out.</p>
+        <p class="muted">Tags for older PHP versions are kept up to date too, with the same rebuilds as the latest. Versions follow PHP's <a href="https://www.php.net/supported-versions.php">supported versions</a> lifecycle, and the aim is to build images for each one for as long as PHP supports it.</p>
+
+        <h2 id="build">How an image is built</h2>
+        <p>Everything runs on GitHub Actions in <a href={repoUrl}>the repository</a>. Pull requests run the build job for PHP {v} on amd64 and publish nothing.</p>
+        <ol class="route">
+          {route.map((leg) => (
+            <li class="leg">
+              <p class="leg-head"><span class="job">{leg.job}</span><span>{leg.where}</span></p>
+              <ol>
+                {leg.stops.map(([name, what]) => (
+                  <li class="stop"><strong>{name}</strong><span>{what}</span></li>
+                ))}
+              </ol>
+            </li>
+          ))}
+        </ol>
+
+        <h2 id="rebuilds">When images are rebuilt</h2>
+        <div class="departure">
+          <time class="mono">04:17</time>
+          <p><strong>UTC, every day.</strong> A check compares each published image with what it was built from, and rebuilds only the images that are out of date.</p>
+        </div>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Rebuild triggers">
+          <table class="triggers">
+            <thead><tr><th scope="col">When there is</th><th scope="col">Rebuilt</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">A new PHP patch</th><td>Published under its own tag, such as <code>{v}.13</code>. The <code>{v}</code> tags move to it.</td></tr>
+              <tr><th scope="row">A new OS base image</th><td>Every image on that OS.</td></tr>
+              <tr><th scope="row">A new extension, FrankenPHP or s6-overlay release</th><td>The images that include it.</td></tr>
+              <tr><th scope="row">A new nginx release</th><td>The <code>nginx</code> image and every <code>php-fpm-nginx</code> image.</td></tr>
+              <tr><th scope="row">A fixable CVE in OS packages</th><td>The images that have it.</td></tr>
+              <tr><th scope="row">30 days since the last build</th><td>That image.</td></tr>
+              <tr><th scope="row">A change to how images are built</th><td>Every image.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <dl class="facts rules">
+          <div><dt>OS packages</dt><dd>Upgraded on every rebuild. An image with nothing to change keeps its digest.</dd></div>
+          <div><dt>Older patch tags</dt><dd>Still rebuilt for OS and extension fixes while their minor version is built here. <code>{v}.12</code> stays on PHP {v}.12.</dd></div>
+          <div><dt>Release candidates</dt><dd><code>8.6-rc1</code> and the like stop when the next one ships.</dd></div>
+          <div><dt>Old digests</dt><dd>Never deleted, so an <code>@sha256:</code> reference keeps working after its tag moves on.</dd></div>
+        </dl>
+        <p class="muted">Each image page lists its builds and what changed in each. The <a href={`${base}changelog/`}>changelog</a> lists them all.</p>
+
+        <h2 id="ai">AI disclosure</h2>
+        <div class="credits">
+          <div>
+            <p>Generative AI was used in the creation of this repository.</p>
+            <ul class="credit-list">
+              <li>Claude Opus 5.5</li>
+              <li>Claude Sonnet 5.5</li>
+              <li>ChatGPT Sol 6.1</li>
+            </ul>
+          </div>
+          <div>
+            <p>The following skills were used to help:</p>
+            <ul class="credit-list">
+              {skills.map(([name, url]) => <li><a href={url}>{name}</a><span class="mono muted">{url.replace(/^https:\/\/(github\.com\/)?/, '').replace(/\/$/, '')}</span></li>)}
+            </ul>
+          </div>
+        </div>
+
+        <h2 id="creator">About the creator</h2>
+        <div class="creator">
+          <p class="lead">The project was created by <a href="https://mintopia.net">Jessica Smith</a>. I'm a senior principal engineer for DigiCert, I'm based in the UK and have been using PHP for over 28 years.</p>
+          <p>It was created to replace a few previous repositories that tried to do the same thing for my own personal use - mostly because extensions like GRPC took so long to build and I wanted something quick.</p>
+          <p>When <span class="mono">CVE-2026-109618</span> and <span class="mono">CVE-2026-109619</span> were due to be announced, I knew the official Docker images would take a while to be updated and released and I needed something quicker for some of the services I'm responsible for - so I created this repository.</p>
+          <p>I hope people find it useful and if you have any feedback or suggestions, please <a href={`${repoUrl}/issues`}>raise an issue</a> or reach out to me.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .roster { width: 100%; }
+  .roster tbody th, .roster td { padding: 14px 24px 14px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; text-align: left; font-weight: 400; }
+  .line-id { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+  .state { font-size: 0.8125rem; color: var(--muted); }
+  .state.rc { color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip.off { background: none; border-style: dashed; color: var(--control); text-decoration: line-through; }
+  .roster .num { white-space: nowrap; text-align: right; padding-right: 0; }
+  .roster thead th:last-child { text-align: right; }
+
+  .route { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 36px; }
+  .prose .leg-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 18px; }
+  .job { font: 700 0.8125rem var(--mono); padding: 3px 10px; background: var(--ink); color: var(--bg); border-radius: 5px; }
+  .leg-head > span:last-child { font-size: 0.8125rem; color: var(--muted); }
+  .leg > ol { list-style: none; margin: 0 0 0 16px; padding: 0; }
+  .stop { position: relative; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 24px; padding: 0 0 22px 30px; }
+  .stop:last-child { padding-bottom: 0; }
+  .stop:not(:last-child)::after { content: ''; position: absolute; left: 0; top: 10px; bottom: -10px; width: 2px; background: var(--ink); }
+  .stop::before { content: ''; position: absolute; z-index: 1; left: -6px; top: 5px; width: 10px; height: 10px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
+  .stop span { color: var(--muted); }
+
+  .departure { display: flex; align-items: center; gap: 28px; margin: 20px 0 28px; padding: 22px 28px; background: var(--board); border-radius: 10px; }
+  .departure time { font-size: clamp(2.25rem, 5vw, 3.25rem); line-height: 1; font-weight: 500; letter-spacing: -0.03em; }
+  .prose .departure p { margin: 0; color: var(--muted); }
+  .departure strong { color: var(--ink); }
+
+  .triggers { width: 100%; }
+  .triggers th, .triggers td { padding: 12px 24px 12px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  .triggers tbody th { font: 500 0.875rem var(--ui); color: var(--ink); text-transform: none; letter-spacing: 0; width: 42%; }
+  .triggers td { color: var(--muted); }
+  .triggers td code { color: var(--ink); }
+
+  .facts.rules { margin-top: 32px; }
+  .facts.rules > div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 4px 24px; }
+  .facts.rules dd { font: 400 0.875rem var(--ui); text-align: left; overflow-wrap: normal; }
+  .facts.rules dd code { font-size: 0.88em; padding: 1px 5px; background: var(--board); border-radius: 4px; }
+
+
+  .credits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 56px; margin-top: 16px; }
+  .prose .credits p { margin: 0 0 12px; }
+  .credit-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .credit-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-weight: 500; }
+  .credit-list li .mono { font-size: 0.75rem; font-weight: 400; }
+
+  .creator { display: grid; gap: 4px; }
+  .prose .creator .lead { font-size: 1.125rem; margin-top: 16px; }
+  .creator .mono { font-size: 0.9em; }
+
+  @media (max-width: 640px) {
+    .credits { grid-template-columns: minmax(0, 1fr); }
+    .roster thead { display: none; }
+    .roster tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
+    .roster tbody th, .roster td { padding: 0; border: 0; }
+    .roster td.num { grid-column: 2; grid-row: 1; align-self: center; }
+    .roster td:not(.num) { grid-column: 1 / -1; }
+    .stop { grid-template-columns: minmax(0, 1fr); padding-left: 24px; }
+    .departure { flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 20px; }
+    .triggers thead { display: none; }
+    .triggers tr { display: grid; gap: 2px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+    .triggers th, .triggers td { padding: 0; border: 0; }
+    .triggers tbody th { width: auto; }
+    .facts.rules > div { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
