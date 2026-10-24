@@ -90,8 +90,9 @@ mongodb=$(packagist mongodb/mongodb-extension)
 otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
-common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg stamp "$(date -u +%F)" \
-	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PKG_STAMP: $stamp}')
+pie=$(github_release php/pie)
+common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg pie "$pie" --arg stamp "$(date -u +%F)" \
+	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PIE_VERSION: $pie, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
@@ -134,14 +135,15 @@ published_patches() {
 }
 
 frankenphp_src=''
-# plan <versions.json key> <lane> <php-src tag> <os...>: sets plan_lanes and plan_merges
+# plan <versions.json key> <lane> <php-src tag> <os...>: sets plan_lanes, plan_merges and plan_products
+# plan_products has every lane, stale or not, so the products job keeps all their build products cached
 # lane is the key for the current patch, or X.Y.Z for an older patch that keeps only its own tags
 plan() {
 	local key=$1 lane=$2 php_tag=$3; shift 3
 	local patch=false version exts stable src_vars fp sha os targets vars minor grpc nginx base
 	local stale rebuild t ref reasons published exp arch diff cves built
 	[ "$lane" = "$key" ] || patch=true
-	plan_lanes='[]' plan_merges='[]'
+	plan_lanes='[]' plan_merges='[]' plan_products='[]'
 	version=$(jq -c --arg k "$key" '.[$k]' <<<"$matrix")
 	exts=$(jq -c .extensions <<<"$version")
 	stable=$(jq -r .stable <<<"$version")
@@ -171,6 +173,10 @@ plan() {
 			vars=$(jq -c --arg grpc "$grpc" --arg nginx "$nginx" --arg alpine "$minor" --arg base "$base" \
 				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
+		for arch in amd64 arm64; do
+			plan_products=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --argjson vars "$vars" \
+				'. + [{version: $lane, os: $os, arch: $arch, vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_products")
+		done
 
 		# every publish is permanent, so only stale targets are rebuilt; an older patch never gains targets it was not published with
 		if ! $all || $patch; then
@@ -215,7 +221,7 @@ plan() {
 		for arch in "${archs[@]}"; do
 			plan_lanes=$(jq -c --arg lane "$lane" --arg os "$os" --arg arch "$arch" --arg targets "${targets[*]}" --argjson vars "$vars" \
 				'. + [{version: $lane, os: $os, arch: $arch, targets: $targets,
-					vars: ($vars + {PLATFORMS: "linux/\($arch)", CACHE_REF: "ghcr.io/mintopia/php-base-images-cache:\($lane)-\($os)-\($arch)"})}]' <<<"$plan_lanes")
+					vars: ($vars + {PLATFORMS: "linux/\($arch)"})}]' <<<"$plan_lanes")
 		done
 
 		[ ${#archs[@]} -eq 2 ] || continue
@@ -237,12 +243,13 @@ for key in "${selected[@]}"; do
 	[ "$stable" = true ] || unstable=(--unstable)
 	php_tag=$(safe "$("$root/scripts/resolve-php-tag.sh" "$key" "${unstable[@]}")")
 	plan "$key" "$key" "$php_tag" alpine trixie
-	lanes=$plan_lanes merges=$plan_merges
+	lanes=$plan_lanes merges=$plan_merges products=$plan_products
 
-	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check
+	# ponytail: newest patches first; any past the 256-job limit wait for a later daily check; products past 256 lanes are not kept cached
 	while read -r older os; do
 		[ "php-$older" != "$php_tag" ] || continue
 		plan "$key" "$older" "php-$older" "$os"
+		products=$(jq -c --argjson p "$plan_products" '(. + $p)[:256]' <<<"$products")
 		l=$(jq -c --argjson p "$plan_lanes" '. + $p' <<<"$lanes")
 		m=$(jq -c --argjson p "$plan_merges" '. + $p' <<<"$merges")
 		if [ "$(jq length <<<"$l")" -le 256 ] && [ "$(jq length <<<"$m")" -le 256 ]; then
@@ -252,12 +259,12 @@ for key in "${selected[@]}"; do
 		fi
 	done < <(awk -v k="$key" 'split($1, a, ".") == 3 && a[1] "." a[2] == k' <<<"$patch_tags" | sort -rV)
 
-	[ "$lanes" = '[]' ] || plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" '. + {($k): {lanes: $l, merges: $m}}' <<<"$plans")
+	plans=$(jq -c --arg k "$key" --argjson l "$lanes" --argjson m "$merges" --argjson p "$products" '. + {($k): {lanes: $l, merges: $m, products: $p}}' <<<"$plans")
 done
 
 if [ -z "${GITHUB_OUTPUT:-}" ]; then
 	jq . <<<"$plans"
 else
 	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; } >> "$GITHUB_OUTPUT"
-	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges") | join("; ")' <<<"$plans")"
+	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges, \(.value.products | length) product lanes") | join("; ")' <<<"$plans")"
 fi
