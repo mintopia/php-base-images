@@ -16,7 +16,7 @@ caches=$("$gh" api "repos/$GITHUB_REPOSITORY/actions/caches?key=$prefix&ref=$ref
 
 names=() keys=() actions=()
 while IFS='=' read -r name key; do
-	[ "$name" != prefix ] && [ -n "$key" ] || continue
+	{ [ "$name" = prefix ] || [ -z "$key" ]; } && continue
 	entry=$(jq -c --arg k "$key" '[.[] | select(.key == $k)] | first // empty' <<<"$caches")
 	action=''
 	if [ -n "$entry" ]; then
