@@ -1,12 +1,12 @@
 #!/bin/sh
 # Builds PHP from /usr/src/php.tar.xz into /usr/local like docker-library/php, writes runtime deps to /runtime-deps.
-# One ZTS build with CLI, embed (FrankenPHP) and FPM; the zts and fpm images both copy it.
+# One ZTS build with CLI, embed (FrankenPHP) and FPM; the zts, fpm and frankenphp images copy it.
 set -eux
 
 id=$(echo "$PHP_VERSION" | awk -F. '{ print $1 * 100 + $2 }')
 
 set -- --enable-zts --disable-zend-signals --enable-zend-max-execution-timers \
-	--enable-phpdbg --enable-phpdbg-readline --enable-embed \
+	--disable-cgi --disable-phpdbg --enable-embed \
 	--enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data \
 	--enable-mbstring
 if [ "$id" -lt 806 ]; then
@@ -52,6 +52,12 @@ export CFLAGS="$PHP_CFLAGS" CPPFLAGS="$PHP_CPPFLAGS" LDFLAGS="$PHP_LDFLAGS" \
 	--with-pdo-pgsql=shared \
 	--with-pdo-odbc=shared,unixODBC,/usr \
 	--with-snmp=shared \
+	--enable-intl=shared \
+	--with-zip=shared \
+	--enable-exif=shared \
+	--enable-sockets=shared \
+	--with-gmp=shared \
+	--enable-soap=shared \
 	"$@"
 make -j "$(nproc)"
 find . -type f -name '*.a' -delete
@@ -68,7 +74,7 @@ fi
 if [ "$id" -lt 805 ]; then
 	docker-php-ext-enable opcache
 fi
-docker-php-ext-enable sodium bcmath pcntl gd pdo_mysql pdo_pgsql pdo_odbc snmp
+docker-php-ext-enable sodium bcmath pcntl gd pdo_mysql pdo_pgsql pdo_odbc snmp intl zip exif sockets gmp soap
 
 cd /usr/local/etc
 cp php-fpm.conf.default php-fpm.conf
@@ -85,6 +91,8 @@ if command -v apk >/dev/null; then
 	scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
 		| tr ',' '\n' | sort -u \
 		| awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' > /runtime-deps
+	# icu-libs only pulls English locale data; intl needs every locale
+	echo icu-data-full >> /runtime-deps
 else
 	find /usr/local -type f \( -perm -u+x -o -name '*.so' \) -exec ldd {} + 2>/dev/null \
 		| awk '$3 ~ /^\// && $3 !~ /^\/usr\/local\// { print $3 }' | sort -u \
