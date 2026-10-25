@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Sourced. Authenticates git with github.com via $GITHUB_TOKEN when set; never traced, the header is the token in base64.
 case $- in *x*) set +x; git_auth_trace=1 ;; *) git_auth_trace= ;; esac
 if [ -n "${GITHUB_TOKEN:-}" ]; then
