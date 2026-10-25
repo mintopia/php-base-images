@@ -8,6 +8,7 @@ else
 fi
 [ "$version" = "$GRPC_VERSION" ]
 
+. /build/git-auth.sh
 git clone --depth 1 --filter=blob:none --sparse -b "v$version" https://github.com/grpc/grpc /src/grpc
 git -C /src/grpc sparse-checkout set src/php/ext/grpc
 cd /src/grpc/src/php/ext/grpc

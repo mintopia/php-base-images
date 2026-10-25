@@ -25,7 +25,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ARG PHP_TAG
 WORKDIR /work
-RUN test -n "$PHP_TAG" \
+RUN --mount=type=bind,source=build/git-auth.sh,target=/git-auth.sh --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
+    test -n "$PHP_TAG" \
+    && . /git-auth.sh \
     && git clone --quiet --depth 1 --branch "$PHP_TAG" https://github.com/php/php-src.git php-src \
     && bash php-src/scripts/dev/makedist "$PHP_TAG" \
     && mv php-src/php-*.tar.xz /php.tar.xz
@@ -200,37 +202,37 @@ RUN --mount=type=bind,source=build,target=/build \
 FROM ext-base AS build-ext-grpc
 ARG EXTENSIONS
 ARG GRPC_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh grpc
 
 FROM ext-base AS build-ext-redis
 ARG EXTENSIONS
 ARG REDIS_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh pie redis "phpredis/phpredis:$REDIS_VERSION"
 
 FROM ext-base AS build-ext-apcu
 ARG EXTENSIONS
 ARG APCU_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh pie apcu "apcu/apcu:$APCU_VERSION"
 
 FROM ext-base AS build-ext-mongodb
 ARG EXTENSIONS
 ARG MONGODB_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh pie mongodb "mongodb/mongodb-extension:$MONGODB_VERSION"
 
 FROM ext-base AS build-ext-opentelemetry
 ARG EXTENSIONS
 ARG OPENTELEMETRY_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh pie opentelemetry "open-telemetry/ext-opentelemetry:$OPENTELEMETRY_VERSION"
 
 FROM ext-base AS build-ext-protobuf
 ARG EXTENSIONS
 ARG PROTOBUF_VERSION
-RUN --mount=type=bind,source=build,target=/build \
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     /build/extensions.sh pie protobuf "pie-extensions/protobuf:$PROTOBUF_VERSION"
 
 FROM scratch AS ext-grpc
