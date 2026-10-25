@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       data: ${{ steps.data.outputs.sha }}
+      pages: github-pages-${{ github.run_attempt }}
     permissions:
       contents: write
       packages: read
@@ -93,6 +94,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: site/dist
 
   deploy:
@@ -123,3 +125,5 @@ jobs:
       - id: deploy
         if: steps.current.outputs.stale != 'true'
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.pages }}
