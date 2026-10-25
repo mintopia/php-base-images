@@ -23,6 +23,7 @@ permissions:
 env:
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
   # keeps every lane's build products in the Actions cache (ADR 0024); only main saves, so pull requests read main's

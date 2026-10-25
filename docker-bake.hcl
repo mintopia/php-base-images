@@ -178,6 +178,8 @@ target "nginx" {
 target "_src" {
   dockerfile = "php-src.Dockerfile"
   platforms  = PLATFORMS == "" ? [] : split(",", PLATFORMS)
+  # anonymous GitHub API calls hit the shared runner IP rate limit
+  secret = ["id=github_token,env=GITHUB_TOKEN"]
   args = {
     PHP_TAG                = PHP_TAG
     OS                     = OS
