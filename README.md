@@ -47,7 +47,7 @@ tests/smoke.sh php:8.5-alpine-cli cli
 - `workflow_dispatch` with `force` rebuilds everything.
 - Older patch releases are still maintained. Once `8.5.12` ships, `8.5.11-*` tags keep getting the same daily rebuilds, built from the `php-8.5.11` source tag. Only the `8.5.11*` tags move.
 - Each PHP version builds and merges in its own call of `.github/workflows/lanes.yml`, so one version publishes without waiting for the others.
-- Each site build lists every recorded build's CVEs and flags the critical ones. OS package CVEs come from a Trivy scan of the build's SBOM, and PHP CVEs from php-src's security advisories.
+- Each site build lists every recorded build's CVEs and flags the critical ones. OS package and Go module CVEs come from a Trivy scan of the build's SBOM. PHP, FrankenPHP and PIE extension CVEs come from their GitHub security advisories, and nginx CVEs from nginx.org's.
 - Pull requests build and smoke-test 8.5 amd64 on both OSes without publishing. The `full-build` label builds every lane.
 - The workflow signs published manifests with keyless cosign. To verify one: `cosign verify ghcr.io/mintopia/php:8.5 --certificate-identity-regexp 'https://github.com/mintopia/php-base-images/' --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 - Each lane first restores its build products (compiled PHP, FrankenPHP and the PIE and grpc extensions) from the GitHub Actions cache, and builds any that are missing. A `products` job before the lanes keeps every lane's products cached, rebuilding them after 30 days. There is no BuildKit registry cache.
