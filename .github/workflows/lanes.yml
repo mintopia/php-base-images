@@ -73,6 +73,12 @@ jobs:
         with:
           path: products/ext-grpc
           key: ${{ steps.plan.outputs.ext-grpc }}
+      # built by build.yml's libgrpc job (ADR 0030); missing, it is built inline
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' ext-grpc ')
+        with:
+          path: products/libgrpc
+          key: ${{ steps.plan.outputs.libgrpc }}
       - uses: actions/cache/restore@v5
         if: contains(format(' {0} ', steps.plan.outputs.restore), ' ext-redis ')
         with:
@@ -201,10 +207,16 @@ jobs:
           path: products/frankenphp
           key: ${{ steps.keys.outputs.frankenphp }}
       - uses: actions/cache/restore@v5
+        id: ext-grpc
         if: steps.keys.outputs.ext-grpc != ''
         with:
           path: products/ext-grpc
           key: ${{ steps.keys.outputs.ext-grpc }}
+      - uses: actions/cache/restore@v5
+        if: steps.keys.outputs.ext-grpc != '' && steps.ext-grpc.outputs.cache-hit != 'true'
+        with:
+          path: products/libgrpc
+          key: ${{ steps.keys.outputs.libgrpc }}
       - uses: actions/cache/restore@v5
         if: steps.keys.outputs.ext-redis != ''
         with:

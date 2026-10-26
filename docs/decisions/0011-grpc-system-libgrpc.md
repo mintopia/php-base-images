@@ -1,6 +1,6 @@
 # Decision: grpc builds in-tree against the distro's libgrpc
 
-Status: accepted
+Status: superseded
 Date: 2026-10-24
 
 ## Context

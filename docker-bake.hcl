@@ -23,7 +23,7 @@ variable "WATCHER_SHA256" { default = "190bbe5e19923083db2beb3aa68f4e99a563c8f68
 variable "NGINX_VERSION" { default = "1.30.6" }
 variable "S6_OVERLAY_VERSION" { default = "3.2.3.2" }
 variable "PIE_VERSION" { default = "1.5.3" }
-variable "GRPC_VERSION" { default = "" }
+variable "GRPC_VERSION" { default = "1.85.0" }
 variable "REDIS_VERSION" { default = "6.3.0" }
 variable "APCU_VERSION" { default = "5.1.28" }
 variable "MONGODB_VERSION" { default = "2.5.5" }
@@ -35,15 +35,10 @@ variable "REVISION" { default = "" }
 
 variable "NGINX_BASE_DIGEST" { default = "" }
 
-function "grpc_version" {
-  params = []
-  result = GRPC_VERSION != "" ? GRPC_VERSION : { alpine = "1.78.1", trixie = "1.51.1" }[OS]
-}
-
 function "ext_versions" {
   params = []
   result = {
-    grpc          = grpc_version()
+    grpc          = GRPC_VERSION
     redis         = REDIS_VERSION
     apcu          = APCU_VERSION
     mongodb       = MONGODB_VERSION
@@ -124,7 +119,7 @@ target "_common" {
     S6_OVERLAY_VERSION = S6_OVERLAY_VERSION
     PKG_STAMP          = PKG_STAMP
   }
-  labels = merge(oci_labels(trimprefix(PHP_TAG, "php-")), {
+  labels = merge(oci_labels(trimprefix(PHP_TAG, "php-")), { "net.mintopia.pie.version" = PIE_VERSION }, {
     for ext, version in ext_versions() : "net.mintopia.ext.${ext}.version" => version if contains(VERSIONS[PHP_VERSION].extensions, ext)
   })
 }
@@ -191,7 +186,7 @@ target "_src" {
     WATCHER_VERSION        = WATCHER_VERSION
     WATCHER_SHA256         = WATCHER_SHA256
     EXTENSIONS             = join(" ", VERSIONS[PHP_VERSION].extensions)
-    GRPC_VERSION           = grpc_version()
+    GRPC_VERSION           = GRPC_VERSION
     REDIS_VERSION          = REDIS_VERSION
     APCU_VERSION           = APCU_VERSION
     MONGODB_VERSION        = MONGODB_VERSION
@@ -221,7 +216,7 @@ target "src-frankenphp" {
 target "src-ext" {
   inherits = ["_src"]
   target   = "ext"
-  contexts = products(concat(["php"], [for ext in ext_products() : "ext-${ext}"]))
+  contexts = products(concat(["php", "libgrpc"], [for ext in ext_products() : "ext-${ext}"]))
 }
 
 target "product-php" {
@@ -240,5 +235,11 @@ target "product-ext" {
   matrix   = { ext = ext_products() }
   inherits = ["_src"]
   target   = "ext-${ext}"
-  contexts = products(["php"])
+  contexts = products(["php", "libgrpc"])
+}
+
+# shared by every leg of an OS and arch, so built by its own job, not the products group (ADR 0030)
+target "product-libgrpc" {
+  inherits = ["_src"]
+  target   = "libgrpc"
 }

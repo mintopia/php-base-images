@@ -9,11 +9,11 @@ conf_dir="$PHP_INI_DIR/conf.d"
 
 if [ "$1" = deps ]; then
 	if command -v apk >/dev/null; then
-		apk add --no-cache --virtual .build-deps $PHPIZE_DEPS git grpc-dev openssl-dev
+		apk add --no-cache --virtual .build-deps $PHPIZE_DEPS git openssl-dev zlib-dev
 	else
 		# php-src images ship no compiler, and install-php-extensions expects one
 		apt-get update
-		apt-get install -y --no-install-recommends $PHPIZE_DEPS ca-certificates git libgrpc-dev libssl-dev libtool libwebp-dev unzip
+		apt-get install -y --no-install-recommends $PHPIZE_DEPS ca-certificates git libssl-dev libtool libwebp-dev unzip zlib1g-dev
 	fi
 	ls "$ext_dir" > /ext-before
 	ls "$conf_dir" > /conf-before
