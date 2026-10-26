@@ -59,15 +59,33 @@ trivy=aquasec/trivy:0.76.1
 trivy_dir=$(mktemp -d)
 trap 'rm -rf "$trivy_dir"' EXIT
 
-# CVEs in OS packages that have a fixed package available; the PKG_STAMP upgrade layer picks those up on rebuild
-fixable_cves() {
-	local distro
-	docker buildx imagetools inspect "$1" --format "{{ json (index .SBOM \"$2\").SPDX }}" > "$trivy_dir/sbom.json" || return 1
+# scans everything the site scans (ADR 0030): OS packages and Go modules from the SBOM, and labelled components against upstream advisories.
+# Prints the CVEs a rebuild fixes, fixable OS packages that the PKG_STAMP upgrade layer picks up, as "<n>: <ids>".
+# The rest are logged: Go modules are pinned by FrankenPHP and components by their version, so only a new upstream release fixes them.
+image_cves() {
+	local ref=$1 platform=$2 labels=$3 php=$4 distro upstream
+	docker buildx imagetools inspect "$ref" --format "{{ json (index .SBOM \"$platform\").SPDX }}" > "$trivy_dir/sbom.json" || return 1
 	distro=$(jq -r '[.packages[].externalRefs[]?.referenceLocator | capture("^pkg:(apk|deb)/.*[?&]distro=(?<d>[a-z]+-[0-9.]+)").d][0] // empty' "$trivy_dir/sbom.json")
 	[ -n "$distro" ] || return 1
 	docker run --rm --user "$(id -u):$(id -g)" -v "$trivy_dir:/work" -e TRIVY_CACHE_DIR=/work/cache "$trivy" sbom -q --distro "${distro/-//}" \
-		--pkg-types os --ignore-unfixed --format json /work/sbom.json \
-		| jq -r '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] | unique | if length > 0 then "\(length): \(.[:3] | join(","))" else empty end'
+		--pkg-types os,library --ignore-unfixed --format json /work/sbom.json > "$trivy_dir/scan.json" || return 1
+	if [ ! -d "$trivy_dir/advisories" ]; then
+		"$root/scripts/advisories.sh" "$trivy_dir/advisories" || { log "warning: advisory fetch failed"; mkdir -p "$trivy_dir/advisories"; echo '[]' > "$trivy_dir/advisories/none.json"; }
+	fi
+	upstream=$(jq -n -r --slurpfile scan "$trivy_dir/scan.json" --argjson labels "$labels" --arg php "$php" '
+		def key: [scan("[0-9]+") | tonumber];
+		def within($v): (.from == null or ($v | key) >= (.from | key)) and (.above == null or ($v | key) > (.above | key))
+			and (.below == null or ($v | key) < (.below | key)) and (.upto == null or ($v | key) <= (.upto | key));
+		(reduce inputs as $a ({}; .[input_filename | split("/") | last | rtrimstr(".json")] = $a)) as $adv
+		| [$labels | to_entries[] | {c: (.key | capture("^net\\.mintopia\\.(?:ext\\.)?(?<c>[a-z0-9]+)\\.version$").c), v: .value}]
+			+ (if $php == "" then [] else [{c: "php", v: $php}] end)
+		| [.[] as $x | ($adv[$x.c] // [])[] | select(any(.ranges[]; within($x.v))) | "\($x.c) \($x.v) \(.id)"]
+			+ [$scan[0].Results[]? | select(.Class != "os-pkgs") | .Vulnerabilities[]? | "\(.PkgName) \(.InstalledVersion) \(.VulnerabilityID)"]
+		| unique | join(", ")' "$trivy_dir/advisories"/*.json)
+	[ -z "$upstream" ] || log "CVEs a rebuild does not fix: $ref: $upstream"
+	# nginx.org packages share the distro package name, so distro advisories misjudge them; nginx.org advisories cover them
+	jq -r '[.Results[]? | select(.Class == "os-pkgs") | .Vulnerabilities[]? | select(.PkgName != "nginx") | .VulnerabilityID] | unique
+		| if length > 0 then "\(length): \(.[:3] | join(","))" else empty end' "$trivy_dir/scan.json"
 }
 
 matrix=$(jq -c '.variable.VERSIONS.default' "$root/versions.json")
@@ -91,24 +109,25 @@ otel=$(packagist open-telemetry/ext-opentelemetry)
 protobuf=$(packagist pie-extensions/protobuf)
 s6=$(github_release just-containers/s6-overlay)
 pie=$(github_release php/pie)
-common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg pie "$pie" --arg stamp "$(date -u +%F)" \
-	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PIE_VERSION: $pie, PKG_STAMP: $stamp}')
+# latest stable grpc release, so security fixes arrive with the version (ADR 0030)
+grpc=$(github_release grpc/grpc)
+common=$(jq -n --arg redis "$redis" --arg apcu "$apcu" --arg mongodb "$mongodb" --arg otel "$otel" --arg protobuf "$protobuf" --arg s6 "$s6" --arg pie "$pie" --arg grpc "$grpc" --arg stamp "$(date -u +%F)" \
+	'{REDIS_VERSION: $redis, APCU_VERSION: $apcu, MONGODB_VERSION: $mongodb, OPENTELEMETRY_VERSION: $otel, PROTOBUF_VERSION: $protobuf, S6_OVERLAY_VERSION: $s6, PIE_VERSION: $pie, GRPC_VERSION: $grpc, PKG_STAMP: $stamp}')
 
 declare -A os_vars
 for os in alpine trixie; do
 	[ -z "$only_os" ] || [ "$os" = "$only_os" ] || continue
 	case $os in
 		alpine)
-			base='' nginx='' grpc=''
+			base='' nginx=''
 			;;
 		trixie)
 			base=$(digest debian:trixie-slim)
 			nginx=$(deb_version https://nginx.org/packages/debian/dists/trixie/nginx/binary-amd64/Packages.gz nginx gzip)
-			grpc=$(deb_version https://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages.xz libgrpc-dev xz)
 			;;
 	esac
-	os_vars[$os]=$(jq -c --arg os "$os" --arg base "$base" --arg nginx "$nginx" --arg grpc "$grpc" \
-		'. + {OS: $os, NGINX_BASE_DIGEST: $base, NGINX_VERSION: $nginx, GRPC_VERSION: $grpc}' <<<"$common")
+	os_vars[$os]=$(jq -c --arg os "$os" --arg base "$base" --arg nginx "$nginx" \
+		'. + {OS: $os, NGINX_BASE_DIGEST: $base, NGINX_VERSION: $nginx}' <<<"$common")
 done
 [ ${#os_vars[@]} -gt 0 ] || { log "no OS matches '$only_os'"; exit 1; }
 
@@ -117,7 +136,7 @@ expected_labels() {
 		($v != "nginx") as $src
 		| {grpc: "GRPC_VERSION", redis: "REDIS_VERSION", apcu: "APCU_VERSION", mongodb: "MONGODB_VERSION", opentelemetry: "OPENTELEMETRY_VERSION", protobuf: "PROTOBUF_VERSION"} as $ev
 		| {"org.opencontainers.image.base.digest": $vars.NGINX_BASE_DIGEST}
-		+ (if $src then {"net.mintopia.php.source": "php-src", "net.mintopia.php.tag": $vars.PHP_TAG} else {} end)
+		+ (if $src then {"net.mintopia.php.source": "php-src", "net.mintopia.php.tag": $vars.PHP_TAG, "net.mintopia.pie.version": $vars.PIE_VERSION} else {} end)
 		+ (if $src and $v == "frankenphp" and $vars.FRANKENPHP_SRC_VERSION then {"net.mintopia.frankenphp.version": $vars.FRANKENPHP_SRC_VERSION} else {} end)
 		+ (if $v == "nginx" then {} else [$exts[] | select($ev[.]) | {key: "net.mintopia.ext.\(.).version", value: $vars[$ev[.]]}] | from_entries end)
 		+ (if $v == "nginx" or $v == "php-fpm-nginx" then {"net.mintopia.nginx.version": $vars.NGINX_VERSION} else {} end)
@@ -141,7 +160,7 @@ frankenphp_src=''
 # lane is the key for the current patch, or X.Y.Z for an older patch that keeps only its own tags
 plan() {
 	local key=$1 lane=$2 php_tag=$3; shift 3
-	local patch=false version exts stable src_vars fp sha os targets vars minor grpc nginx base
+	local patch=false version exts stable src_vars fp sha os targets vars minor nginx base
 	local stale rebuild t ref reasons published exp arch diff cves built
 	[ "$lane" = "$key" ] || patch=true
 	plan_lanes='[]' plan_merges='[]' plan_products='[]'
@@ -166,13 +185,11 @@ plan() {
 		$patch || [ "$key" != "$nginx_key" ] || targets+=(nginx)
 		vars=$(jq -c --arg key "$key" --argjson src "$src_vars" '. + {PHP_VERSION: $key} + $src' <<<"${os_vars[$os]}")
 		if [ "$os" = alpine ]; then
-			# grpc.sh asserts the distro grpc version
 			minor=$(safe "$(docker run --rm -q "alpine:3@$(digest alpine:3)" cut -d. -f1,2 /etc/alpine-release)")
-			grpc=$(apk_version "https://dl-cdn.alpinelinux.org/alpine/v$minor/community/x86_64/APKINDEX.tar.gz" grpc-dev)
 			nginx=$(apk_version "https://nginx.org/packages/alpine/v$minor/main/x86_64/APKINDEX.tar.gz" nginx)
 			base=$(digest "alpine:$minor")
-			vars=$(jq -c --arg grpc "$grpc" --arg nginx "$nginx" --arg alpine "$minor" --arg base "$base" \
-				'. + {GRPC_VERSION: $grpc, NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
+			vars=$(jq -c --arg nginx "$nginx" --arg alpine "$minor" --arg base "$base" \
+				'. + {NGINX_VERSION: $nginx, ALPINE_VERSION: $alpine, NGINX_BASE_DIGEST: $base}' <<<"$vars")
 		fi
 		if ! $patch; then
 			for arch in amd64 arm64; do
@@ -202,7 +219,8 @@ plan() {
 							[ "$built" -gt "$(($(date +%s) - 30 * 86400))" ] || reasons+=("built $(jq -rn --argjson t "$built" '$t | todate'), over 30 days")
 						fi
 						if [ ${#reasons[@]} -eq 0 ]; then
-							cves=$(fixable_cves "$ref" "linux/${archs[0]}") || { log "warning: CVE scan failed: $ref"; cves=''; }
+							cves=$(image_cves "$ref" "linux/${archs[0]}" "$(jq -c --arg p "linux/${archs[0]}" '.[$p].config.Labels // {}' <<<"$published")" \
+								"$([ "$t" = nginx ] || echo "${php_tag#php-}")") || { log "warning: CVE scan failed: $ref"; cves=''; }
 							[ -z "$cves" ] || reasons+=("fixable CVEs $cves")
 						fi
 					fi
@@ -268,6 +286,9 @@ done
 if [ -z "${GITHUB_OUTPUT:-}" ]; then
 	jq . <<<"$plans"
 else
-	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; } >> "$GITHUB_OUTPUT"
+	# one libgrpc build per OS and arch, from any lane whose version has grpc (ADR 0030)
+	libgrpc=$(jq -c --argjson m "$matrix" '[.[].products[] | select($m[.version | split(".")[:2] | join(".")].extensions | index("grpc"))]
+		| unique_by([.os, .arch]) | map({os, arch, vars})' <<<"$plans")
+	{ echo "plans=$plans"; echo "versions=$(jq -c keys <<<"$plans")"; echo "libgrpc=$libgrpc"; } >> "$GITHUB_OUTPUT"
 	log "$(jq -r 'to_entries | map("\(.key): \(.value.lanes | length) lanes, \(.value.merges | length) merges, \(.value.products | length) product lanes") | join("; ")' <<<"$plans")"
 fi

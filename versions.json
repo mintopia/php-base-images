@@ -38,7 +38,7 @@
           "extensions": ["bcmath", "exif", "gd", "gmp", "intl", "mbstring", "mongodb", "opcache", "opentelemetry", "pcntl", "pdo", "pdo_mysql", "pdo_odbc", "pdo_pgsql", "pdo_sqlite", "snmp", "soap", "sockets", "zip"],
           "dropped": {
             "apcu": "apcu 5.1.28 passes a string as php_verror's type argument, which PHP 8.6 changed to int",
-            "grpc": "grpc 1.78.1 src/php/ext/grpc calls XtOffsetOf, removed in PHP 8.6",
+            "grpc": "grpc 1.85.0 src/php/ext/grpc calls XtOffsetOf, removed in PHP 8.6",
             "protobuf": "pie-extensions/protobuf 35.1 calls zval_dtor, removed in PHP 8.6",
             "redis": "phpredis 6.3.0 calls XtOffsetOf, removed in PHP 8.6; dev-develop builds"
           }

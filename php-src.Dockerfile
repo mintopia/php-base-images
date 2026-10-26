@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # PHP, FrankenPHP and PIE extensions built from source, and the zts/fpm/frankenphp bases the OS Dockerfiles build on.
-# Product stages (php, frankenphp, ext-*) are FROM scratch and hold only their files; a bake context can replace each (ADR 0023).
+# Product stages (php, frankenphp, libgrpc, ext-*) are FROM scratch and hold only their files; a bake context can replace each (ADR 0023).
 ARG PHP_TAG
 ARG OS=alpine
 ARG ALPINE_VERSION=3
@@ -144,6 +144,16 @@ RUN if command -v apk >/dev/null; then apk add --no-cache cmake g++ linux-header
     && cmake --build /src/build -j "$(nproc)" \
     && cmake --install /src/build --prefix /out
 
+# independent of PHP, so every PHP version and tag shares one build (ADR 0030)
+# hadolint ignore=DL3006
+FROM os-${OS} AS build-libgrpc
+ARG GRPC_VERSION
+RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
+    /build/libgrpc.sh
+
+FROM scratch AS libgrpc
+COPY --from=build-libgrpc /opt/grpc/ /opt/grpc/
+
 FROM golang:${GO_VERSION}-${OS} AS golang
 
 FROM golang AS frankenphp-src
@@ -201,8 +211,8 @@ RUN --mount=type=bind,source=build,target=/build \
 
 FROM ext-base AS build-ext-grpc
 ARG EXTENSIONS
-ARG GRPC_VERSION
-RUN --mount=type=bind,source=build,target=/build --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
+COPY --from=libgrpc /opt/grpc/ /opt/grpc/
+RUN --mount=type=bind,source=build,target=/build \
     /build/extensions.sh grpc
 
 FROM ext-base AS build-ext-redis

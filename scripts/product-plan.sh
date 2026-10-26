@@ -17,6 +17,8 @@ caches=$("$gh" api "repos/$GITHUB_REPOSITORY/actions/caches?key=$prefix&ref=$ref
 names=() keys=() actions=()
 while IFS='=' read -r name key; do
 	{ [ "$name" = prefix ] || [ -z "$key" ]; } && continue
+	# shared products (libgrpc) are planned under their own prefix
+	[[ $key == "$prefix"* ]] || continue
 	entry=$(jq -c --arg k "$key" '[.[] | select(.key == $k)] | first // empty' <<<"$caches")
 	action=''
 	if [ -n "$entry" ]; then

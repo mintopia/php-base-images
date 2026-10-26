@@ -45,6 +45,7 @@ jobs:
     outputs:
       plans: ${{ steps.resolve.outputs.plans }}
       versions: ${{ steps.resolve.outputs.versions }}
+      libgrpc: ${{ steps.resolve.outputs.libgrpc }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/login-action@v4
@@ -83,9 +84,59 @@ jobs:
           [ -z "$ONLY_OS" ] || [ "$ONLY_OS" = all ] || args+=(--os "$ONLY_OS")
           scripts/resolve-matrix.sh "${args[@]}"
 
-  php:
+  # one libgrpc per OS and arch, shared by every PHP version's lanes (ADR 0030); main only, like the products jobs
+  libgrpc:
     needs: resolve
-    if: needs.resolve.outputs.versions != '[]'
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.resolve.outputs.libgrpc != '[]' }}
+    name: libgrpc ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.libgrpc) }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.DOCKERHUB_TOKEN != ''
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Bake variables
+        env:
+          VARS: ${{ toJSON(matrix.vars) }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VARS" >> "$GITHUB_ENV"
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/product-keys.sh --libgrpc | tee keys >> "$GITHUB_OUTPUT"
+          scripts/product-plan.sh < keys | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v5
+        if: contains(format(' {0} ', steps.plan.outputs.restore), ' libgrpc ')
+        with:
+          path: products/libgrpc
+          key: ${{ steps.plan.outputs.libgrpc }}
+      - name: Build
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' libgrpc ')
+        run: |
+          docker buildx bake -f docker-bake.hcl -f versions.json --set product-libgrpc.output=type=local,dest=products/libgrpc product-libgrpc
+          du -sh products/libgrpc
+      - uses: actions/cache/save@v5
+        if: contains(format(' {0} ', steps.plan.outputs.build), ' libgrpc ')
+        with:
+          path: products/libgrpc
+          key: ${{ steps.plan.outputs.libgrpc }}
+
+  php:
+    needs: [resolve, libgrpc]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.versions != '[]' }}
     name: php ${{ matrix.version }}
     strategy:
       fail-fast: false

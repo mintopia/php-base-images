@@ -32,6 +32,7 @@ entry() { jq -cn --arg k "$1" --arg c "$(iso $((now - $2 * day)))" --arg a "$(is
 
 keys=$'prefix=p-\nphp=p-php\next-grpc=p-ext-grpc'
 check "all missing" ' php ext-grpc ' ' ' 0 '[]' <<<"$keys"
+check "shared key left out" ' php ext-grpc ' ' ' 0 '[]' <<<"$keys"$'\nlibgrpc=libgrpc-alpine-amd64-libgrpc-x'
 check "all fresh" ' ' ' ' 0 "[$(entry p-php 1 1), $(entry p-ext-grpc 1 1)]" <<<"$keys"
 check "idle 5 days" ' ' ' php ' 0 "[$(entry p-php 10 5), $(entry p-ext-grpc 10 4)]" <<<"$keys"
 check "ext missing restores php" ' ext-grpc ' ' php ' 0 "[$(entry p-php 1 1)]" <<<"$keys"

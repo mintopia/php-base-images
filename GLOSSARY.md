@@ -24,7 +24,7 @@ The single checked-in file listing supported PHP versions, their stability, thei
 An extension shipped in the PHP source tree (bcmath, pcntl, pdo_*, gd, snmp). Installed with the extension installer script.
 
 **PIE extension**:
-An extension distributed via Packagist and installed with PIE (apcu, mongodb, opentelemetry, protobuf, redis). Unofficial Packagist mirrors are acceptable. grpc is the exception: built in-tree against the OS libgrpc.
+An extension distributed via Packagist and installed with PIE (apcu, mongodb, opentelemetry, protobuf, redis). Unofficial Packagist mirrors are acceptable. grpc is the exception: built with phpize against the `libgrpc` build product, which is compiled from the latest grpc release (ADR 0030).
 
 **Stable**:
 A PHP minor line with a GA release. Only Stable lines receive the `latest`, `8`, and version-less default tags.
@@ -56,7 +56,7 @@ The daily job that compares published images against upstream (PHP, OS, nginx, F
 PHP compiled from a php-src git tag by `php-src.Dockerfile`. Every Lane uses it.
 
 **Build product**:
-The files of one slow build step for one PHP tag, OS and arch (`php`, `frankenphp`, `ext-grpc`, `ext-<PIE extension>`), cached as a tarball in the GitHub Actions cache and given to a Lane's bake as a named context. See ADR 0023.
+The files of one slow build step for one PHP tag, OS and arch (`php`, `frankenphp`, `ext-grpc`, `ext-<PIE extension>`), cached as a tarball in the GitHub Actions cache and given to a Lane's bake as a named context. See ADR 0023. `libgrpc` is shared by every PHP tag of an OS and arch (ADR 0030).
 
 **Full rebuild**:
 A run with `--all` that rebuilds every Lane regardless of upstream changes: a push that changes an image input, `force`, or a pull request.

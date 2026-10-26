@@ -1,6 +1,6 @@
 # Decision: The daily check rebuilds only the targets that are stale
 
-Status: accepted
+Status: superseded
 Date: 2026-10-24
 
 ## Context
