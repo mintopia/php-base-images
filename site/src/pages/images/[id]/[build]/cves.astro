@@ -38,7 +38,7 @@ const fixed = cur?.cves ? b.cves!.filter((c) => !liveIds.has(c.id)).length : 0;
       </div>
       <aside>
         <h2>Scan</h2>
-        <p class="note">OS package CVEs come from a Trivy scan of the image's SBOM, and PHP CVEs from php-src security advisories. Scanned {fmtTime(scannedAt!)} UTC.</p>
+        <p class="note">OS package and Go module CVEs come from a Trivy scan of the image's SBOM. PHP, nginx, FrankenPHP and PIE extension CVEs come from their own security advisories. Scanned {fmtTime(scannedAt!)} UTC.</p>
       </aside>
     </div>
   </div>

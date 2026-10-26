@@ -50,6 +50,8 @@ export interface Cve {
   pkg: string;
   fixed: string;
   url?: string;
+  // absent for OS packages, which the daily check rebuilds for; the rest wait on a new upstream release
+  kind?: 'upstream';
 }
 
 export interface Build extends BuildRecord {
@@ -95,22 +97,30 @@ const records: BuildRecord[] = [
 
 // written by scripts/scan-cves.sh on each site build; absent when the scan failed
 const cvesFile = process.env.SITE_CVES ?? resolve(root, '.site-data/cves.json');
-const scans: { scanned?: string; php?: { id: string; url: string; severity: string; fixed: string[] }[]; builds: Record<string, Cve[]> } =
-  existsSync(cvesFile) ? JSON.parse(readFileSync(cvesFile, 'utf8')) : { builds: {} };
+interface Range { from?: string; above?: string; below?: string; upto?: string; fixed: string }
+const scans: {
+  scanned?: string;
+  advisories?: Record<string, { id: string; url: string; severity: string; ranges: Range[] }[]>;
+  builds: Record<string, Cve[]>;
+} = existsSync(cvesFile) ? JSON.parse(readFileSync(cvesFile, 'utf8')) : { builds: {} };
 export const scannedAt = scans.scanned ?? null;
 
 export const criticals = (b: { cves: Cve[] | null }) => b.cves?.filter((c) => c.severity === 'CRITICAL').length ?? 0;
 export const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
 
-// php-src advisories name a fixed X.Y.Z per minor; earlier patches of that minor are affected
+const within = (v: string, r: Range) =>
+  (!r.from || byVersion(v, r.from) >= 0) && (!r.above || byVersion(v, r.above) > 0)
+  && (!r.below || byVersion(v, r.below) < 0) && (!r.upto || byVersion(v, r.upto) <= 0);
+
+// PHP, nginx, FrankenPHP and the PIE extensions aren't in the SBOM, so their versions are matched against upstream advisories
 function cves(r: BuildRecord): Cve[] | null {
   if (!scannedAt) return null;
-  const minor = r.php.split('.').slice(0, 2).join('.');
-  const php = r.variant === 'nginx' ? [] : (scans.php ?? []).flatMap((a) => {
-    const fixed = a.fixed.find((f) => f.startsWith(`${minor}.`));
-    return fixed && byVersion(r.php, fixed) < 0 ? [{ id: a.id, url: a.url, severity: a.severity, pkg: 'php', fixed }] : [];
-  });
-  return [...new Map([...php, ...(scans.builds[r.digest] ?? [])].map((c) => [c.id, c])).values()].sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
+  const versions = [...(r.variant === 'nginx' ? [] : [['php', r.php] as const]), ...components(r.labels)];
+  const advised = versions.flatMap(([pkg, v]) => (scans.advisories?.[pkg] ?? []).flatMap((a) => {
+    const range = a.ranges.find((x) => within(v, x));
+    return range ? [{ id: a.id, url: a.url, severity: a.severity, pkg, fixed: range.fixed, kind: 'upstream' as const }] : [];
+  }));
+  return [...new Map([...advised, ...(scans.builds[r.digest] ?? [])].map((c) => [c.id, c])).values()].sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
 }
 
 const COMPONENT = /^net\.mintopia\.(?:ext\.)?([a-z0-9]+)\.version$/;

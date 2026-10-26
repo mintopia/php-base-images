@@ -1,6 +1,6 @@
 # Decision: The site flags builds with critical CVEs
 
-Status: accepted
+Status: superseded
 Date: 2026-10-24
 
 ## Context
