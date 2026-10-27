@@ -142,6 +142,8 @@ case "$target" in
 		[[ "$fwd" != 203.0.113.7* && "$fwd" == *"||"*"|http||" ]] || fail "untrusted forwarded headers reached PHP: '$fwd'"
 		fwd=$(docker exec "$id" curl -fsS "${spoof[@]}" http://127.0.0.1:8080/fwd.php)
 		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https|evil.example|" ] || fail "trusted proxy headers seen as '$fwd'"
+		empty=$(curl -fsS "${spoof[@]}" "http://127.0.0.1:$port/empty.php")
+		[ -z "$empty" ] || fail "empty headers reached PHP: $empty"
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null
