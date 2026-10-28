@@ -1,6 +1,6 @@
 # Decision: The web server resolves the client address and normalises forwarded headers
 
-Status: accepted
+Status: superseded by 0032
 Date: 2026-10-24
 
 ## Context

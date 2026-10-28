@@ -17,10 +17,11 @@
 	encode zstd br gzip
 
 	# FrankenPHP takes REMOTE_ADDR and HTTPS from the raw connection; forwarded headers reach PHP only from TRUSTED_PROXIES
-	map {http.vars.trusted_proxy} {forwarded_host} {forwarded_port} {forwarded_prefix} {
-		true {header.X-Forwarded-Host} {header.X-Forwarded-Port} {header.X-Forwarded-Prefix}
-		default "" "" ""
-	}
+	@untrusted not vars trusted_proxy true
+	request_header @untrusted -X-Forwarded-Host
+	request_header @untrusted -X-Forwarded-Port
+	request_header @untrusted -X-Forwarded-Prefix
+	request_header -Forwarded
 	map {http.vars.trusted_proxy}:{header.X-Forwarded-Proto} {forwarded_proto} {
 		true:https https
 		true:http http
@@ -39,10 +40,6 @@
 		env REQUEST_SCHEME {forwarded_proto}
 		env HTTP_X_FORWARDED_FOR {client_ip}
 		env HTTP_X_FORWARDED_PROTO {forwarded_proto}
-		env HTTP_X_FORWARDED_HOST {forwarded_host}
-		env HTTP_X_FORWARDED_PORT {forwarded_port}
-		env HTTP_X_FORWARDED_PREFIX {forwarded_prefix}
-		env HTTP_FORWARDED ""
 	}
 }
 
