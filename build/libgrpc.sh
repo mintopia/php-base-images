@@ -13,7 +13,7 @@ fi
 . /build/git-auth.sh
 git clone --quiet --depth 1 -b "v$GRPC_VERSION" https://github.com/grpc/grpc /src/grpc
 git -C /src/grpc submodule update --quiet --init --depth 1 \
-	third_party/abseil-cpp third_party/cares/cares third_party/grpc-proto third_party/protobuf third_party/re2
+	third_party/abseil-cpp third_party/cares/cares third_party/protobuf third_party/re2
 
 cmake -S /src/grpc -B /src/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_SHARED_LIBS=OFF \
 	-DgRPC_BUILD_TESTS=OFF -DgRPC_SSL_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package
