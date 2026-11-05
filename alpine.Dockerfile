@@ -7,11 +7,15 @@ FROM --platform=$BUILDPLATFORM alpine:3 AS s6
 ARG S6_OVERLAY_VERSION
 ARG TARGETARCH
 WORKDIR /tmp
-RUN case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1 ;; esac \
+# hadolint ignore=DL3018
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
+    apk add --no-cache curl \
+    && if [ -n "${GITHUB_TOKEN:-}" ]; then set -- --oauth2-bearer "$GITHUB_TOKEN"; fi \
+    && case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) exit 1 ;; esac \
     && url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}" \
     && mkdir /s6 \
     && for f in noarch "$arch"; do \
-        wget -q "$url/s6-overlay-$f.tar.xz" "$url/s6-overlay-$f.tar.xz.sha256" \
+        curl -fsSL --retry 5 "$@" -O "$url/s6-overlay-$f.tar.xz" -O "$url/s6-overlay-$f.tar.xz.sha256" \
         && sha256sum -c "s6-overlay-$f.tar.xz.sha256" \
         && tar -C /s6 -Jxpf "s6-overlay-$f.tar.xz" || exit 1; \
     done

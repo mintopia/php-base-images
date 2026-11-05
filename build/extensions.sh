@@ -3,6 +3,7 @@
 # Steps after deps write only their new files to /out/files and their runtime deps to /out/deps/<step>.
 # shellcheck disable=SC2086
 set -eux
+. /build/retry.sh
 
 ext_dir="$(php-config --extension-dir)"
 conf_dir="$PHP_INI_DIR/conf.d"
@@ -36,7 +37,7 @@ case "$step" in
 		;;
 	pie)
 		step=$2
-		if want "$2"; then pie install "$3"; fi
+		if want "$2"; then retry pie install "$3"; fi
 		;;
 esac
 
