@@ -25,10 +25,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ARG PHP_TAG
 WORKDIR /work
-RUN --mount=type=bind,source=build/git-auth.sh,target=/git-auth.sh --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
+RUN --mount=type=bind,source=build/git-auth.sh,target=/build/git-auth.sh --mount=type=bind,source=build/retry.sh,target=/build/retry.sh --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
     test -n "$PHP_TAG" \
-    && . /git-auth.sh \
-    && git clone --quiet --depth 1 --branch "$PHP_TAG" https://github.com/php/php-src.git php-src \
+    && . /build/git-auth.sh \
+    && . /build/retry.sh \
+    && retry git clone --quiet --depth 1 --branch "$PHP_TAG" https://github.com/php/php-src.git php-src \
     && bash php-src/scripts/dev/makedist "$PHP_TAG" \
     && mv php-src/php-*.tar.xz /php.tar.xz
 

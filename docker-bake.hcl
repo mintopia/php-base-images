@@ -114,6 +114,7 @@ group "products" {
 target "_common" {
   dockerfile = "${OS}.Dockerfile"
   platforms  = PLATFORMS == "" ? [] : split(",", PLATFORMS)
+  secret     = ["id=github_token,env=GITHUB_TOKEN"]
   args = {
     NGINX_VERSION      = NGINX_VERSION
     S6_OVERLAY_VERSION = S6_OVERLAY_VERSION
