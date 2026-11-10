@@ -184,7 +184,8 @@ function image(version: string, os: string, variant: Variant): Image {
   // patch lanes interleave, so a build compares with its own patch, else the minor's previous build
   const diffed = all.map((r, i) => {
     const before = all.slice(0, i);
-    const prev = before.findLast((p) => p.php === r.php && PATCH.test(r.php)) ?? before.findLast((p) => p.version === r.version);
+    // nginx records carry whichever PHP lane built them, so any earlier build is its predecessor
+    const prev = nginx ? before.at(-1) : before.findLast((p) => p.php === r.php && PATCH.test(r.php)) ?? before.findLast((p) => p.version === r.version);
     return { r, changes: diff(prev, r) };
   });
   const lane = all.filter((r) => r.version === version);
