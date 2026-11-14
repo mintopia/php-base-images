@@ -3,6 +3,7 @@
 # Steps after deps write only their new files to /out/files and their runtime deps to /out/deps/<step>.
 # shellcheck disable=SC2086
 set -eux
+. /build/git-auth.sh
 . /build/retry.sh
 
 ext_dir="$(php-config --extension-dir)"
