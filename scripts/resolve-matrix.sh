@@ -52,7 +52,9 @@ packagist() {
 github_release() {
 	local auth=()
 	[ -z "${GITHUB_TOKEN:-}" ] || auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
-	safe "$(curl -fsSL --retry 3 "${auth[@]}" "https://api.github.com/repos/$1/releases/latest" | jq -r '.tag_name | ltrimstr("v")')"
+	# highest stable version, not GitHub's "latest" flag, which follows publish order and so lands on maintenance backports
+	safe "$(curl -fsSL --retry 3 "${auth[@]}" "https://api.github.com/repos/$1/releases?per_page=100" |
+		jq -r '[.[] | select((.draft or .prerelease) | not) | .tag_name | ltrimstr("v") | select(test("^[0-9]+(\\.[0-9]+)+$"))] | max_by(split(".") | map(tonumber))')"
 }
 
 trivy=aquasec/trivy:0.76.1
