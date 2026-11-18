@@ -248,6 +248,8 @@ jobs:
       - name: Build
         run: |
           read -ra targets <<<"$TARGETS"
+          # nginx's smoke test needs a php-fpm sidecar; load it locally even when php-fpm isn't itself being rebuilt
+          [[ " $TARGETS " != *" nginx "* || " $TARGETS " == *" php-fpm "* ]] || targets+=(php-fpm)
           jq -n --arg prefix "php:$PHP_VERSION-$OS-" \
             '{target: ($ARGS.positional | map({key: ., value: {tags: [], output: ["type=docker,name=\($prefix)\(.)"]}}) | from_entries)}' \
             --args "${targets[@]}" > outputs.json
