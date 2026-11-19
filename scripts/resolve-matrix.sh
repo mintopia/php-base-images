@@ -103,7 +103,7 @@ for key in "${keys[@]}"; do
 	selected+=("$key")
 done
 [ ${#selected[@]} -gt 0 ] || { log "no PHP version matches '$only_php'"; exit 1; }
-nginx_key=$(for key in "${selected[@]}"; do jq -r --arg k "$key" 'select(.[$k].stable) | $k' <<<"$matrix"; done | head -1)
+nginx_key=$(jq -r '. as $m | first($ARGS.positional[] | select($m[.].stable)) // empty' --args "${selected[@]}" <<<"$matrix")
 
 redis=$(packagist phpredis/phpredis)
 apcu=$(packagist apcu/apcu)
