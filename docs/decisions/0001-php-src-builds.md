@@ -8,7 +8,7 @@ The official `php` images lag php-src releases, and each release would wait for 
 
 ## Decision
 - Every Lane compiles PHP from a php-src git tag. The official `php:*` images are not used.
-- `scripts/resolve-php-tag.sh` picks the tag: the latest stable tag for the minor. Unstable minors (8.6) use the latest RC tag. Patch lanes use their own `php-X.Y.Z` tag.
+- `scripts/resolve-php-tag.sh` picks the tag: the latest stable tag for the minor. Unstable minors use the latest RC tag. Patch lanes use their own `php-X.Y.Z` tag.
 - The `src` stage of `php-src.Dockerfile` clones the tag and runs php-src's `makedist` on the build platform, so the tarball is never compiled under emulation.
 - `build/php-src.sh` configures PHP with the same flags as docker-library, per version.
 - The `docker-php-*` helper scripts are vendored unmodified from docker-library/php at a pinned commit (`build/docker-php/`).

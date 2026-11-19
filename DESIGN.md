@@ -135,8 +135,8 @@ A neutral ink-on-near-black system with five transit-line colours reserved for P
 - **8.2 Violet** (line-82-violet): PHP 8.2 bullets, chips, matrix underlines and accent when selected.
 - **8.3 Teal** (line-83-teal): PHP 8.3.
 - **8.4 Orange** (line-84-orange): PHP 8.4.
-- **8.5 Blue** (line-85-blue): PHP 8.5, the latest stable. Also the site-wide default `--accent` outside image pages.
-- **8.6 RC Amber** (line-86-amber): PHP 8.6 release candidate. Amber with dark ink text and a dashed inset outline, marking it as provisional. Too light for white text, so the primary button keeps amber fill with dark ink text when 8.6 is selected; the amber itself serves as the accent on the dark ground.
+- **8.5 Blue** (line-85-blue): PHP 8.5. Also the site-wide default `--accent` outside image pages, whichever line is latest.
+- **8.6 Amber** (line-86-amber): PHP 8.6, the latest stable. Amber with dark ink text. Too light for white text, so the primary button keeps amber fill with dark ink text when 8.6 is selected; the amber itself serves as the accent on the dark ground.
 
 Line colours are mid-luminance so they hold on the dark ground. Lines are applied by `data-line="8.x"` setting `--line`; components read `var(--line)`.
 
@@ -158,7 +158,7 @@ Line colours are mid-luminance so they hold on the dark ground. Lines are applie
 
 **The Selected Line Is The Accent Rule.** On image and build pages and in the home hero, `--accent` equals the selected `--line`. Focus outlines, the primary button, the timetable's live-row inset marker and `::selection` follow it. On nginx pages (no PHP line) the line falls back to ink.
 
-**The Dashed RC Rule.** A release candidate line is drawn amber with a 1.5px dashed inset outline in dark ink and dark ink text. Stable lines are solid with white text.
+**The Dashed RC Rule.** Any release candidate line (none at present; 8.7 will be the next) keeps its line colour and adds a 1.5px dashed inset outline in the text colour. Stable lines are solid. White text on every line except 8.6 amber, which takes dark ink.
 
 ## Typography
 
@@ -207,7 +207,7 @@ Small, consistent radii: 4px for chips, 5px for bullets, 6px for buttons and seg
 ### Line Bullet
 The signature mark: a rounded mono label filled with the PHP line colour, like a transit route bullet.
 - **Shape:** 5px radius, min 44x26px; `lg` 72x72px at 10px radius (52px under 560px); `sm` 36x20px at 4px radius.
-- **Colour:** `var(--line)` fill, white 700 mono text. 8.6 is amber with dark ink text and a dashed inset outline. nginx uses an ink-filled bullet with ground text.
+- **Colour:** `var(--line)` fill, white 700 mono text. 8.6 is amber with dark ink text. A release candidate line adds a dashed inset outline. nginx uses an ink-filled bullet with ground text.
 - **Picker state:** in the picker and home hero, bullets render at 60x40px (matching the segmented controls' outer height), 50% opacity at rest, 85% on hover, full with a 2px board + 2px ink ring when current, accent ring on keyboard focus. Lines not built for the current choice drop to 20% and are not links. With nothing selected (`/images/`) every bullet is full strength.
 
 ### Segmented Control
@@ -245,7 +245,7 @@ Header nav (Images, Matrix, Usage, Changelog; the brand links home) is 14px 500 
 ### Do:
 - **Do** set `data-line="8.x"` on any element that represents a PHP version and read `var(--line)`; never hardcode a line hex in a component.
 - **Do** let the selected line drive `--accent` on image pages and the home hero, and fall back to ink when no PHP line applies.
-- **Do** draw 8.6 (and any future RC) amber with a dashed inset outline and dark ink text.
+- **Do** draw any RC line with a dashed inset outline, and 8.6 amber with dark ink text.
 - **Do** set tags, digests, versions, timestamps and commit hashes in JetBrains Mono with tabular numerals.
 - **Do** separate rows with 1px rules and keep surfaces flat.
 - **Do** keep text accents on `--accent-text`, the line colour mixed 55% with white, so violet and blue stay readable on the dark ground; bullets and fills use the raw line colour.

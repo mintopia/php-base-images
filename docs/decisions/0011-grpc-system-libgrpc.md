@@ -16,7 +16,7 @@ PIE and PECL grpc packages bundle the full gRPC C core and take 20 to 30 minutes
 - The grpc version follows each distro, not Packagist, so the two OSes can differ.
 - A mismatch between the library and the source checkout fails the build.
 - grpc's config.m4 builds with `-Werror`, so any PHP deprecation breaks the build. Expect more sed patches for PHP 8.6 on trixie.
-- grpc is dropped on PHP 8.6 (ADR 0015).
+- grpc is dropped on PHP 8.6 (ADR 0034).
 
 ## Supersedes
 None

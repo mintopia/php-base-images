@@ -19,7 +19,7 @@ const alias = (v: string) => (v === latestStable ? 'latest' : versions[v].stable
 
   <section class="start lined" id="start" data-line={latestStable}>
     <h1>PHP base images</h1>
-    <p class="lede">PHP {versionKeys[0]} to {versionKeys.at(-1)} RC for Alpine and Debian trixie, on amd64 and arm64. Built from php-src.</p>
+    <p class="lede">PHP {versionKeys[0]} to {versionKeys.at(-1)}{versions[versionKeys.at(-1)!].stable ? '' : ' RC'} for Alpine and Debian trixie, on amd64 and arm64. Built from php-src.</p>
     <fieldset class="lines">
       <legend>PHP</legend>
       {versionKeys.map((v) => (

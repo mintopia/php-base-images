@@ -13,7 +13,7 @@ ADR 0011 linked grpc against each distro's libgrpc. On 2026-10-26 Alpine 3.24 sh
 - A `libgrpc` job in `build.yml` runs before the PHP versions' lanes, on `main` only. It applies the ADR 0024 lifecycle: build if missing or over 30 days old, and restore if idle for 5 days. Products jobs and lanes restore `libgrpc` only when they have to build `ext-grpc`. If it is not in the cache, it is built inline.
 - `build/grpc.sh` builds the extension with phpize and links `grpc.so` statically against the archives. `--exclude-libs,ALL` hides their symbols, so grpc's upb and abseil cannot clash with the protobuf extension's. The ext-grpc product key includes the libgrpc key.
 - The images no longer install `libgrpc` or `libgrpc29t64`. `grpc.so` needs only libssl, libcrypto, zlib and libstdc++ from the OS.
-- grpc stays dropped on PHP 8.6 (ADR 0015). The extension source still uses `XtOffsetOf`.
+- grpc stays dropped on PHP 8.6 (ADR 0034). The extension source still uses `XtOffsetOf`.
 
 ## Consequences
 - grpc security fixes ship on the first daily run after a grpc release.

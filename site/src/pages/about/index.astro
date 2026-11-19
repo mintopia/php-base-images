@@ -89,7 +89,7 @@ const toc = [
             </tbody>
           </table>
         </div>
-        <p class="muted">Every patch release keeps its own tag, such as <code>{v}.13-php-fpm</code>, next to the moving <code>{v}-php-fpm</code>. The <a href={`${base}matrix/`}>Matrix</a> shows which extensions each version has, and why 8.6 leaves some out.</p>
+        <p class="muted">Every patch release keeps its own tag, such as <code>{v}.13-php-fpm</code>, next to the moving <code>{v}-php-fpm</code>. The <a href={`${base}matrix/`}>Matrix</a> shows which extensions each version has, and why 8.6 still leaves some out.</p>
         <p class="muted">Tags for older PHP versions are kept up to date too, with the same rebuilds as the latest. Versions follow PHP's <a href="https://www.php.net/supported-versions.php">supported versions</a> lifecycle, and the aim is to build images for each one for as long as PHP supports it.</p>
 
         <h2 id="build">How an image is built</h2>
@@ -129,7 +129,7 @@ const toc = [
         <dl class="facts rules">
           <div><dt>OS packages</dt><dd>Upgraded on every rebuild. An image with nothing to change keeps its digest.</dd></div>
           <div><dt>Older patch tags</dt><dd>Still rebuilt for OS and extension fixes while their minor version is built here. <code>{v}.12</code> stays on PHP {v}.12.</dd></div>
-          <div><dt>Release candidates</dt><dd><code>8.6-rc1</code> and the like stop when the next one ships.</dd></div>
+          <div><dt>Release candidates</dt><dd><code>8.7-rc1</code> and the like stop when the next one ships.</dd></div>
           <div><dt>Old digests</dt><dd>Never deleted, so an <code>@sha256:</code> reference keeps working after its tag moves on.</dd></div>
         </dl>
         <p class="muted">Each image page lists its builds and what changed in each. The <a href={`${base}changelog/`}>changelog</a> lists them all.</p>

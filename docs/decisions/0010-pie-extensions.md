@@ -11,7 +11,7 @@ Some extensions are not bundled with PHP: apcu, mongodb, opentelemetry, protobuf
 - `scripts/resolve-matrix.sh` sets each version to the latest stable release on Packagist, and each is recorded in `net.mintopia.ext.<name>.version`.
 - redis is built without the igbinary serializer (ADR 0013).
 - mongodb is built with OpenSSL available, so TLS connections work, including MongoDB Atlas.
-- An extension that fails to build on a PHP version is listed under `dropped` in `versions.json` with the reason, not patched (ADR 0015).
+- An extension that fails to build on a PHP version is listed under `dropped` in `versions.json` with the reason, not patched (ADRs 0015, 0034).
 - grpc is not installed with PIE (ADR 0011).
 
 ## Consequences

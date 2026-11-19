@@ -15,8 +15,8 @@ variable "PRODUCTS_DIR" { default = "products" }
 variable "ALPINE_VERSION" { default = "3" }
 # changes per CI day so final stages re-run apk/apt upgrade instead of reusing cached package layers
 variable "PKG_STAMP" { default = "" }
-variable "FRANKENPHP_SRC_VERSION" { default = "1.13.1" }
-variable "FRANKENPHP_SRC_SHA256" { default = "0c9776464a805966d1fc74c119eb3fbe72145d0a6323b1b8512e9eab6a853a8d" }
+variable "FRANKENPHP_SRC_VERSION" { default = "1.13.5" }
+variable "FRANKENPHP_SRC_SHA256" { default = "c853ae46bfa87a355a8dd3f18e25fb7e986a9fbff4b0ae70139b7fe6662f4a83" }
 variable "GO_VERSION" { default = "1.27" }
 variable "WATCHER_VERSION" { default = "0.14.5" }
 variable "WATCHER_SHA256" { default = "190bbe5e19923083db2beb3aa68f4e99a563c8f685d8037b0536780b0116c4d3" }

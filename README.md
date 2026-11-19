@@ -36,7 +36,7 @@ site/                  # the Astro site at php.mintopia.net
 ```
 PHP_TAG=$(scripts/resolve-php-tag.sh 8.5) docker buildx bake -f docker-bake.hcl -f versions.json   # 8.5 alpine, all targets
 PHP_VERSION=8.4 OS=trixie PHP_TAG=$(scripts/resolve-php-tag.sh 8.4) docker buildx bake -f docker-bake.hcl -f versions.json cli
-PHP_VERSION=8.6 PHP_TAG=$(scripts/resolve-php-tag.sh 8.6 --unstable) docker buildx bake -f docker-bake.hcl -f versions.json cli
+PHP_VERSION=8.6 PHP_TAG=$(scripts/resolve-php-tag.sh 8.6) docker buildx bake -f docker-bake.hcl -f versions.json cli
 tests/smoke.sh php:8.5-alpine-cli cli
 ```
 

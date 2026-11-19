@@ -1,6 +1,6 @@
 # Decision: PHP 8.6 is best effort while in RC
 
-Status: accepted
+Status: superseded
 Date: 2026-10-24
 
 ## Context
