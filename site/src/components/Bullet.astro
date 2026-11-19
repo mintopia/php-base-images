@@ -1,5 +1,6 @@
 ---
+import { versions } from '../lib/data';
 interface Props { version: string; size?: 'sm' | 'lg'; title?: string }
 const { version, size, title } = Astro.props;
 ---
-<span class:list={['bullet', size]} data-line={version} title={title}>{version}</span>
+<span class:list={['bullet', size]} data-line={version} data-rc={versions[version]?.stable === false ? '' : undefined} title={title}>{version}</span>

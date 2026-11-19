@@ -20,7 +20,7 @@ The public face of `ghcr.io/mintopia/php` and `ghcr.io/mintopia/nginx`. It answe
 
 ## Positioning
 
-A matrix of images (PHP 8.2 to 8.6 RC × alpine/trixie × cli/php-fpm/php-fpm-nginx/frankenphp, plus nginx, amd64 + arm64) built from php-src tags, rebuilt daily when upstream inputs or fixable OS CVEs change, signed with cosign, with every upstream input recorded as OCI labels. The site can show per-build provenance because the pipeline records it.
+A matrix of images (PHP 8.2 to 8.6 × alpine/trixie × cli/php-fpm/php-fpm-nginx/frankenphp, plus nginx, amd64 + arm64) built from php-src tags, rebuilt daily when upstream inputs or fixable OS CVEs change, signed with cosign, with every upstream input recorded as OCI labels. The site can show per-build provenance because the pipeline records it.
 
 ## Operating Context
 
@@ -38,7 +38,7 @@ A matrix of images (PHP 8.2 to 8.6 RC × alpine/trixie × cli/php-fpm/php-fpm-ng
 - Changelog: image-level changes derived from recorded build history (PHP, extension, nginx, FrankenPHP, s6, base digest bumps, CVE rebuilds) merged with notable commits on main.
 - Build history: the merge job appends a record per published manifest (date, commit, digest, full PHP version, label versions) to a data file on the gh-pages branch.
 - Architecture choice only changes the platform-specific digest; tags are multi-arch.
-- 8.6 is Unstable/best effort; no 8.6 FrankenPHP.
+- 8.6 is Stable but still lacks apcu, grpc, protobuf and redis until upstream releases build on it (ADR 0034). The next RC line (8.7) will be Unstable/best effort.
 - Undecided: whether past builds before the site launch get backfilled from currently tagged images.
 
 ## Brand Commitments

@@ -30,7 +30,7 @@ An extension distributed via Packagist and installed with PIE (apcu, mongodb, op
 A PHP minor line with a GA release. Only Stable lines receive the `latest`, `8`, and version-less default tags.
 
 **Unstable**:
-A PHP minor line still in RC (currently 8.6). Best effort: extensions that fail to build are dropped, not fixed. Receives the `unstable` tag and its own version tags only.
+A PHP minor line still in RC (none at present; next is 8.7). Best effort: extensions that fail to build are dropped, not fixed. Receives its own version tags only. The `unstable` tag follows the newest minor, Stable or not (ADR 0033).
 _Avoid_: develop
 
 **Default tag component**:

@@ -130,7 +130,8 @@ A series of PHP base images.
  - 8.3
  - 8.4
  - 8.5
- - 8.6 (if we have an RC available, extensions if they're available)
+ - 8.6
+ - The next minor (8.7) once it has an RC, extensions if they're available
 
 #### OS Versions
 
@@ -175,8 +176,8 @@ A series of PHP base images.
 
 Tags consist of <version>-<os>-<type>. There should also be simple tags:
 
- - `latest` - Latest stable PHP (8.5) CLI with Alpine Linux
- - `unstable` - Latest unstable PHP (8.6, latest RC) CLI with Alpine Linux
+ - `latest` - Latest stable PHP (8.6) CLI with Alpine Linux
+ - `unstable` - Newest PHP minor CLI with Alpine Linux: the RC when one exists, else the same as `latest` (8.6)
 
 If any of the components in the tag are missing, then they get the default, eg:
 
@@ -187,8 +188,8 @@ If any of the components in the tag are missing, then they get the default, eg:
 
 #### Versions
 
- - `<empty>` - Latest stable PHP 8 (8.5)
- - `8` - Latest stable PHP 8 (8.5)
+ - `<empty>` - Latest stable PHP 8 (8.6)
+ - `8` - Latest stable PHP 8 (8.6)
  - `8.2` - Latest stable PHP 8.2
  - `8.2.x` - Specific version of PHP 8.2
  - `8.3` - Latest stable PHP 8.3
@@ -197,9 +198,9 @@ If any of the components in the tag are missing, then they get the default, eg:
  - `8.4.x` - Specific version of PHP 8.4
  - `8.5` - Latest stable PHP 8.5
  - `8.5.x` - Specific version of PHP 8.5
- - `8.6` - Latest PHP 8.6
+ - `8.6` - Latest stable PHP 8.6
  - `8.6.x` - Specific version of PHP 8.6
- - `8.6-rcX` - Specific RC of PHP 8.6
+ - `8.6-rcX` - Specific RC of PHP 8.6 (published during the RC phase)
 
 #### OS
 

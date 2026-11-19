@@ -5,16 +5,13 @@ ARG PHP_TAG
 ARG OS=alpine
 ARG ALPINE_VERSION=3
 ARG GO_VERSION=1.27
-ARG INSTALLER_VERSION=2.12.3
+ARG INSTALLER_VERSION=2.13.2
 ARG PIE_VERSION=1.5.3
 
 FROM mlocati/php-extension-installer:${INSTALLER_VERSION} AS installer-upstream
 
 FROM --platform=$BUILDPLATFORM alpine:3 AS installer
 COPY --from=installer-upstream /usr/bin/install-php-extensions /usr/bin/
-# shortcut: installer rejects unreleased PHP minors; drop once it lists 8.6
-RUN sed -i 's/| 805)/| 805 | 806)/' /usr/bin/install-php-extensions \
-    && grep -q '| 806)' /usr/bin/install-php-extensions
 
 FROM ghcr.io/php/pie:${PIE_VERSION}-bin AS pie
 

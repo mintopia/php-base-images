@@ -66,7 +66,7 @@
       },
       "line-86-amber": {
         "role": "primary",
-        "displayName": "8.6 RC Amber",
+        "displayName": "8.6 Amber",
         "canonical": "oklch(79% 0.16 85)",
         "tonalRamp": [
           "oklch(15% 0.16 85)",
@@ -360,7 +360,7 @@
       },
       {
         "name": "The Dashed RC Rule",
-        "body": "A release candidate line is drawn amber with a 1.5px dashed inset outline in dark ink and dark ink text. Stable lines are solid with white text.",
+        "body": "Any release candidate line (none at present; 8.7 will be the next) keeps its line colour and adds a 1.5px dashed inset outline in the text colour. Stable lines are solid. White text on every line except 8.6 amber, which takes dark ink.",
         "section": "colors"
       },
       {
@@ -377,7 +377,7 @@
     "dos": [
       "Do set `data-line=\"8.x\"` on any element that represents a PHP version and read `var(--line)`; never hardcode a line hex in a component.",
       "Do let the selected line drive `--accent` on image pages and the home hero, and fall back to ink when no PHP line applies.",
-      "Do draw 8.6 (and any future RC) amber with a dashed inset outline and dark ink text.",
+      "Do draw any RC line with a dashed inset outline, and 8.6 amber with dark ink text.",
       "Do set tags, digests, versions, timestamps and commit hashes in JetBrains Mono with tabular numerals.",
       "Do separate rows with 1px rules and keep surfaces flat.",
       "Do define every neutral for both themes: once under `prefers-color-scheme: dark` guarded by `:root:not([data-theme='light'])`, and again under `:root[data-theme='dark']`. The manual choice is stored in `localStorage.theme` and applied before paint; \"Auto\" clears it."
