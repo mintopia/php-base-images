@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[ $# -ge 4 ] || { echo "usage: $0 <full-php-version> <stable:true|false> <os> <variant> [latest-stable-minor]" >&2; exit 64; }
-full=$1 stable=$2 os=$3 variant=$4 latest=${5:-8.5}
+[ $# -ge 4 ] || { echo "usage: $0 <full-php-version> <stable:true|false> <os> <variant> [latest-stable-minor] [newest-minor]" >&2; exit 64; }
+full=$1 stable=$2 os=$3 variant=$4 latest=${5:-8.6} newest=${6:-8.6}
 
 if [ "$variant" = nginx ]; then
 	echo "$os"
@@ -32,4 +32,4 @@ for v in "${versions[@]}"; do
 		done
 	done
 done
-[ "$stable" = true ] || [ "$os-$variant" != alpine-cli ] || echo unstable
+[ "$minor" != "$newest" ] || [ "$os-$variant" != alpine-cli ] || echo unstable

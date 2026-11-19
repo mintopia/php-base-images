@@ -93,6 +93,7 @@ image_cves() {
 matrix=$(jq -c '.variable.VERSIONS.default' "$root/versions.json")
 mapfile -t keys < <(jq -r 'keys[]' <<<"$matrix" | sort -V)
 latest=$(jq -r 'to_entries | map(select(.value.stable) | .key)[]' <<<"$matrix" | sort -V | tail -1)
+newest=${keys[-1]}
 archs=(amd64 arm64)
 [ -z "$only_arch" ] || archs=("$only_arch")
 
@@ -249,8 +250,8 @@ plan() {
 
 		[ ${#archs[@]} -eq 2 ] || continue
 		for t in "${targets[@]}"; do
-			plan_merges=$(jq -c --arg lane "$lane" --arg os "$os" --arg t "$t" --argjson stable "$stable" --arg latest "$latest" --argjson patch "$patch" \
-				'. + [{version: $lane, os: $os, variant: $t, stable: $stable, latest: $latest, patch: $patch}]' <<<"$plan_merges")
+			plan_merges=$(jq -c --arg lane "$lane" --arg os "$os" --arg t "$t" --argjson stable "$stable" --arg latest "$latest" --arg newest "$newest" --argjson patch "$patch" \
+				'. + [{version: $lane, os: $os, variant: $t, stable: $stable, latest: $latest, newest: $newest, patch: $patch}]' <<<"$plan_merges")
 		done
 	done
 }

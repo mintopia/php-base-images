@@ -340,6 +340,7 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           STABLE: ${{ matrix.stable }}
           LATEST: ${{ matrix.latest }}
+          NEWEST: ${{ matrix.newest }}
           PATCH: ${{ matrix.patch }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -362,7 +363,7 @@ jobs:
             [ "$php" = "$VERSION" ] || { echo "::error::lane $VERSION built PHP $php"; exit 1; }
             filter="^${php//./\\.}(-|\$)"
           fi
-          while read -r t; do tags+=(-t "$image:$t"); names+=("$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST" | grep -E "$filter")
+          while read -r t; do tags+=(-t "$image:$t"); names+=("$t"); done < <(scripts/tags.sh "$php" "$STABLE" "$OS" "$VARIANT" "$LATEST" "$NEWEST" | grep -E "$filter")
           for i in 1 2 3; do
             docker buildx imagetools create "${tags[@]}" "${refs[@]}" && break
             [ "$i" = 3 ] && exit 1

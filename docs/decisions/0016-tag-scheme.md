@@ -12,13 +12,13 @@ Users pick an image by PHP version, OS and Variant. Tags need short forms for th
   - the full version (`8.5.11`) and the minor (`8.5`);
   - for an RC, `8.6-rc1` and `8.6`;
   - for the latest stable minor only, the major (`8`) and the version-less forms (`alpine-cli`, `latest`);
-  - `unstable` on the Alpine cli image, only for an unstable minor.
+  - `unstable` on the Alpine cli image of the newest minor (ADR 0033).
 - Nginx tags are `<os>`, and `latest` on Alpine.
 - Each tag points at the new multi-arch index on every publish. A digest pins a fixed build (ADR 0026).
 - `scripts/tags_test.sh` checks the rules.
 
 ## Consequences
-- `latest` is the latest stable minor on Alpine cli, and `unstable` is the RC.
+- `latest` is the latest stable minor on Alpine cli, and `unstable` is the newest minor (ADR 0033).
 - Tags move on each rebuild. Pin a digest or a patch tag to hold a build still.
 
 ## Supersedes
