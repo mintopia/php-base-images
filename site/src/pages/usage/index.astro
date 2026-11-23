@@ -526,7 +526,7 @@ const franken_ = [
   ['SERVER_NAME', '<code>:8080</code>', 'Address Caddy serves. Set a hostname and Caddy gets and renews its certificate. Port 80 and 443 must reach the container for that.'],
   ['FRANKENPHP_CONFIG', 'unset', 'Goes inside the <code>frankenphp</code> block, for example <code>worker ./public/index.php</code>.'],
   ['LARAVEL_OCTANE', 'unset', '<code>true</code> serves the app through Laravel Octane\'s worker. See <a href="#octane">Laravel</a>.'],
-  ['LARAVEL_OCTANE_WORKERS', 'the container\'s CPU limit', 'Number of Octane workers.'],
+  ['LARAVEL_OCTANE_WORKERS', 'unset', 'Number of Octane workers. Unset, FrankenPHP starts two per CPU the container may use.'],
   ['CADDY_GLOBAL_OPTIONS', 'unset', 'Goes inside the global options block.'],
   ['CADDY_EXTRA_CONFIG', 'unset', 'Top-level Caddyfile config, outside any site block.'],
   ['CADDY_SERVER_EXTRA_DIRECTIVES', 'unset', 'Directives in the site block, before PHP is served.'],
@@ -965,10 +965,10 @@ const toc = [
           <Code lang=".dockerignore" code={laravelIgnore} />
           <ul>
             <li><code>LARAVEL_OCTANE=true</code> runs Octane's FrankenPHP worker script from <code>vendor/</code> for every request that isn't a static file. Caddy still serves files from <code>public/</code>, and nothing in the app is changed, so tests and <code>artisan serve</code> work as before.</li>
-            <li><code>LARAVEL_OCTANE_WORKERS</code> sets the number of workers. It defaults to the container's CPU limit, or the host's CPU count without one.</li>
+            <li><code>LARAVEL_OCTANE_WORKERS</code> sets the number of workers. Without it, FrankenPHP starts two per CPU the container may use.</li>
             <li><code>LARAVEL_OPTIMIZE=true</code> runs <code>php artisan optimize</code> as <code>PUID</code> when each container starts, so the cache holds the container's environment, not the build's. It adds about a second to each start. First it creates Laravel's storage directories and, if anything in <code>storage/</code> or <code>bootstrap/cache</code> isn't owned by <code>PUID</code>, changes its owner. That's the only place the image changes ownership for you.</li>
           </ul>
-          <p>When it works, the log shows <code>FrankenPHP started</code> with <code>worker_threads</code> set to the worker count, and requests after the first take a few milliseconds.</p>
+          <p>When it works, the log shows <code>FrankenPHP started</code> with <code>worker_threads</code> above 0, and requests after the first take a few milliseconds.</p>
 
           <h4 id="laravel-compose">Web, queue, scheduler and Reverb</h4>
           <p>Every role is the same image. <code>migrate</code> runs first and the rest wait for it.</p>

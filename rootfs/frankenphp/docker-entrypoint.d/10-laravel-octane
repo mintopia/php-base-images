@@ -11,20 +11,12 @@ case "${FRANKENPHP_CONFIG:-}" in
 	*worker*) echo "LARAVEL_OCTANE: FRANKENPHP_CONFIG already defines a worker; remove it" >&2; exit 1 ;;
 esac
 
-cpus_available() {
-	if read -r quota period 2>/dev/null < /sys/fs/cgroup/cpu.max && [ "$quota" != max ]; then
-		echo $(( (quota + period - 1) / period ))
-	else
-		nproc
-	fi
-}
-
-# one per CPU, half FrankenPHP's default: each worker holds a booted copy of the app
-workers=${LARAVEL_OCTANE_WORKERS:-$(cpus_available)}
+num=
+[ -z "${LARAVEL_OCTANE_WORKERS:-}" ] || num="num $LARAVEL_OCTANE_WORKERS"
 
 export FRANKENPHP_PHP_SERVER_CONFIG="worker {
 	file \"$worker\"
-	num $workers
+	$num
 	match /*
 	env APP_BASE_PATH \"$APP_ROOT\"
 	env APP_PUBLIC_PATH \"$APP_PUBLIC_PATH\"

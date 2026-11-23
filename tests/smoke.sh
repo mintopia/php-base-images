@@ -198,7 +198,7 @@ case "$target" in
 		docker run -d --name "$id" -p 127.0.0.1::8080 --cpus 2 "${hardened[@]}" --tmpfs /data --tmpfs /config --tmpfs /tmp \
 			-e TRUSTED_PROXIES='127.0.0.1/32 ::1/128' "${octane[@]}" "$image" >/dev/null
 		port=$(docker port "$id" 8080/tcp | head -1 | cut -d: -f2)
-		wait_log '"worker_threads":2,'
+		wait_log '"worker_threads":4,'
 		body=$(curl -fsS "http://127.0.0.1:$port/some/route")
 		[[ "$body" == "octane "[0-9]*" /app " ]] || fail "LARAVEL_OCTANE request returned '$body'"
 		[ "$(curl -fsS "http://127.0.0.1:$port/static.txt")" = static ] || fail "LARAVEL_OCTANE static file"

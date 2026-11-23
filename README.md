@@ -170,7 +170,7 @@ Keep the image's start command. Replacing `CMD` or `ENTRYPOINT`, including with 
 | Variable | Image | Default |
 |---|---|---|
 | `LARAVEL_OCTANE` | `frankenphp` | unset. `true` runs `vendor/laravel/octane/bin/frankenphp-worker.php` as a worker for every request that isn't a static file |
-| `LARAVEL_OCTANE_WORKERS` | `frankenphp` | the container's CPU limit, else the host's CPU count |
+| `LARAVEL_OCTANE_WORKERS` | `frankenphp` | unset, so FrankenPHP starts two per CPU the container may use |
 | `LARAVEL_OPTIMIZE` | all PHP | unset. `true` runs `php artisan optimize` as PUID at start |
 
 These replace `php artisan octane:frankenphp`, so every role keeps the image's start. `LARAVEL_OCTANE` adds the worker to `php_server` through `FRANKENPHP_PHP_SERVER_CONFIG` and refuses to start if `FRANKENPHP_CONFIG` also defines one. `octane:status` and `octane:reload` don't apply; `MAX_REQUESTS` sets requests per worker.
