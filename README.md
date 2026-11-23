@@ -6,6 +6,7 @@ Multi-arch (amd64, arm64) PHP images for Alpine and Debian trixie, published to 
 
 - [Images](https://php.mintopia.net/images/): pick a PHP version, OS and Variant for the exact tag, what's in it and every build.
 - [Usage](https://php.mintopia.net/usage/): compose files for each Variant, proxies, hardening, logs, extending and Xdebug.
+- [Frameworks](https://php.mintopia.net/frameworks/): Laravel (Octane on FrankenPHP, queues, Horizon, scheduler, Reverb, migrations) and Symfony (worker mode, Messenger, Scheduler).
 - [Matrix](https://php.mintopia.net/matrix/): extensions per PHP version, and which Variants exist on which OS.
 - [Changelog](https://php.mintopia.net/changelog/): what changed in each published build.
 
@@ -161,6 +162,19 @@ These settings apply to the `nginx` image (`ghcr.io/mintopia/nginx`) and to `php
 | `TRUSTED_PROXIES`, `CLIENT_IP_HEADER` | see [Client IP and proxies](#client-ip-and-proxies) |
 
 FrankenPHP also imports any `*.caddyfile` files in `/etc/frankenphp/Caddyfile.d/`.
+
+Keep the image's start command. Replacing `CMD` or `ENTRYPOINT`, including with `php artisan octane:frankenphp`, or setting `USER`, bypasses the entrypoint and this Caddyfile, so `TRUSTED_PROXIES`, `HTTPS` behind a proxy, `PUID` and `/docker-entrypoint.d/` hooks are all lost. See [Laravel Octane](#laravel-octane) and [Frameworks](https://php.mintopia.net/frameworks/#octane).
+
+#### Laravel Octane
+
+Use worker mode without Octane starting the server. The Caddyfile sends every request that isn't a file to `public/index.php`, so make that Octane's worker script in the image build and register it with `FRANKENPHP_CONFIG`:
+
+```dockerfile
+RUN cp vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php public/index.php
+ENV OCTANE_SERVER=frankenphp FRANKENPHP_CONFIG="worker /app/public/index.php"
+```
+
+Queue workers, Horizon, the scheduler, Reverb and migrations run the same image with only `command` changed. `octane:status` and `octane:reload` don't apply; `MAX_REQUESTS` sets requests per worker. The full recipe, with compose files and Symfony's equivalent, is on [Frameworks](https://php.mintopia.net/frameworks/#octane).
 
 ### Client IP and proxies
 

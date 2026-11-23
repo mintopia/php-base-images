@@ -8,6 +8,7 @@ export const GET: APIRoute = ({ site }) => {
     'images/',
     'matrix/',
     'usage/',
+    'frameworks/',
     'changelog/',
     'about/',
     ...pages.flatMap((i) => [

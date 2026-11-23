@@ -387,6 +387,7 @@ const toc = [
             </div>
           </figure>
           <Code lang="compose.yaml" code={franken} />
+          <p class="muted">Keep the image's start command. Replacing <code>CMD</code> or <code>ENTRYPOINT</code>, for example with <code>php artisan octane:frankenphp</code>, or setting <code>USER</code>, loses <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and start-up hooks. <a href={`${import.meta.env.BASE_URL}frameworks/#octane`}>Frameworks</a> shows Laravel Octane and Symfony in worker mode without that.</p>
         </section>
 
         <section id="cli-setup">
@@ -394,6 +395,7 @@ const toc = [
           <p>The <code>cli</code> image runs whatever command you give it: one-off tasks, or queue workers and schedulers alongside a web container.</p>
           <Code lang="shell" code={cli} />
           <Code lang="compose.yaml" code={worker} />
+          <p class="muted">For Laravel queues, Horizon, the scheduler and Reverb, or Symfony Messenger, see <a href={`${import.meta.env.BASE_URL}frameworks/`}>Frameworks</a>.</p>
         </section>
 
         <h2 id="configure">Configure</h2>
@@ -644,7 +646,7 @@ const toc = [
           <h3>Development mode</h3>
           <p><code>PHP_INI_MODE=development</code> loads <code>php.ini-development</code>, which displays errors. Leave <code>PHP_OPCACHE_VALIDATE_TIMESTAMPS</code> at <code>1</code> so code changes are picked up. <code>PHP_FPM_MAX_REQUESTS=1</code> restarts each php-fpm worker after every request, so no state leaks between requests.</p>
           <Code lang="compose.yaml" code={dev} />
-          <p class="muted">FrankenPHP has no per-worker request limit. Skip worker mode in development, or let the app restart its worker: Laravel Octane takes <code>--max-requests=1</code>, and the Symfony runtime reads <code>FRANKENPHP_LOOP_MAX=1</code>.</p>
+          <p class="muted">FrankenPHP has no per-worker request limit. Skip worker mode in development, or let the app restart its worker: Laravel Octane's worker script reads <code>MAX_REQUESTS=1</code>, and the Symfony runtime reads <code>FRANKENPHP_LOOP_MAX=1</code>.</p>
         </section>
 
         <section id="xdebug">
