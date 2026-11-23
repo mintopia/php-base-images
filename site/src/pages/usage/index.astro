@@ -41,7 +41,7 @@ const franken = `services:
     volumes:
       - "./:/app"
     environment:
-      # without num: 2 per CPU, every host CPU when the container has no CPU limit
+      # without num, FrankenPHP starts 2 per CPU, counting every host CPU when the container has no CPU limit
       FRANKENPHP_CONFIG: |
         worker {
           file ./public/index.php
@@ -785,7 +785,7 @@ const toc = [
           <div class="ranges table-wrap" tabindex="0" role="region" aria-label="Trusted proxy ranges"><Fragment set:html={proxyRanges} /></div>
           <p class="muted">With several proxies in a chain, list every hop's range. Never trust <code>0.0.0.0/0</code> in production.</p>
           <h4>Frameworks and the Host header</h4>
-          <p>Laravel and Symfony read <code>REMOTE_ADDR</code> and <code>HTTPS</code> straight from the server, so they need no trusted-proxy setup of their own. <code>request()-&gt;isSecure()</code>, <code>ip()</code>, <code>getClientIp()</code> and generated URLs come out right as they are.</p>
+          <p>Laravel and Symfony read <code>REMOTE_ADDR</code> and <code>HTTPS</code> straight from the server, so they need no trusted-proxy setup of their own. <code>request()-&gt;isSecure()</code>, <code>ip()</code>, <code>getClientIp()</code> and generated URLs are correct without changes.</p>
           <p><code>Host</code> is still whatever the client sent, and absolute URLs are built from it. Have the proxy pass <code>Host</code> through, and limit it to your own hostnames with <code>trustHosts</code> in Laravel or <code>framework.trusted_hosts</code> in Symfony.</p>
           <Code lang="bootstrap/app.php" code={trustHosts} />
         </section>
@@ -929,12 +929,12 @@ const toc = [
         <section id="app-roles">
           <h3>One image, many roles</h3>
           <p>Build one image for the app. The web container runs it as it is. Queue workers, schedulers and one-off jobs run the same image with a different <code>command</code>, so they all go through the entrypoint and get <code>PUID</code>, the PHP settings and any <a href="#hooks">start-up hooks</a>.</p>
-          <p>Keep the web container's start command. Don't replace its <code>ENTRYPOINT</code> or <code>CMD</code>, and don't set <code>USER</code>. That includes <code>php artisan octane:frankenphp</code>, the command the Octane docs suggest: it starts its own Caddy with its own Caddyfile, and <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and the start-up hooks are all lost. Use <code>LARAVEL_OCTANE</code> or <code>FRANKENPHP_CONFIG</code> instead, as below.</p>
+          <p>Keep the web container's start command. Don't replace its <code>ENTRYPOINT</code> or <code>CMD</code>, and don't set <code>USER</code>. That includes <code>php artisan octane:frankenphp</code>, the command the Octane docs suggest. It starts its own Caddy with its own Caddyfile, so the container loses <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and the start-up hooks. Use <code>LARAVEL_OCTANE</code> or <code>FRANKENPHP_CONFIG</code> instead, as below.</p>
           <ul>
             <li>Install Composer dependencies in a build stage on the same image, as in <a href="#composer">Composer</a>.</li>
-            <li>Bake the code into the image, owned by root. Only the directories the app writes to need to belong to <code>PUID</code>.</li>
+            <li>Copy the code into the image, owned by root. Only the directories the app writes to need to belong to <code>PUID</code>.</li>
             <li>Set <code>PHP_OPCACHE_VALIDATE_TIMESTAMPS=0</code>. The code never changes inside a running container.</li>
-            <li>Send logs to stderr, and keep sessions, cache and queues in Redis or the database, so containers stay disposable.</li>
+            <li>Send logs to stderr, and keep sessions, cache and queues in Redis or the database, so you can replace a container without losing data.</li>
             <li>Run migrations as a one-off <code>migrate</code> service that the other roles wait for with <code>condition: service_completed_successfully</code>. It runs once per deploy, and if it fails nothing new starts. A start-up hook would run them in every container and replica at once.</li>
           </ul>
         </section>
@@ -973,9 +973,9 @@ const toc = [
           <h4 id="laravel-compose">Web, queue, scheduler and Reverb</h4>
           <p>Every role is the same image. <code>migrate</code> runs first and the rest wait for it.</p>
           <Code lang="compose.yaml" code={laravelCompose} />
-          <p>Reverb is its own WebSocket server, so <code>TRUSTED_PROXIES</code> doesn't apply to it. Terminate TLS at the proxy and send <code>/app</code> and <code>/apps</code> to <code>reverb:8080</code>. The app publishes to Reverb over the internal network with <code>REVERB_HOST</code>; browsers connect through the proxy with the <code>VITE_REVERB_*</code> values baked into your front-end build.</p>
+          <p>Reverb is its own WebSocket server, so <code>TRUSTED_PROXIES</code> doesn't apply to it. Terminate TLS at the proxy and send <code>/app</code> and <code>/apps</code> to <code>reverb:8080</code>. The app publishes to Reverb over the internal network with <code>REVERB_HOST</code>; browsers connect through the proxy with the <code>VITE_REVERB_*</code> values compiled into your front-end build.</p>
           {!hasRedis && (<>
-            <p>PHP {v} has no <code>redis</code> extension yet (see the <a href={`${base}matrix/`}>Matrix</a>), so this file sets <code>REDIS_CLIENT: predis</code>. Add the pure-PHP client to the app, or use PHP 8.5 with <code>phpredis</code>:</p>
+            <p>PHP {v} has no <code>redis</code> extension yet, as the <a href={`${base}matrix/`}>Matrix</a> shows, so this file sets <code>REDIS_CLIENT: predis</code>. Add the pure-PHP client to the app, or use PHP 8.5 with <code>phpredis</code>:</p>
             <Code lang="shell" code={predis} />
           </>)}
 
@@ -987,7 +987,7 @@ const toc = [
           <p>The image starts the server, not Octane, so <code>octane:status</code> and <code>octane:reload</code> report that it isn't running. Deploy by replacing containers. To restart the workers in place without dropping connections, call FrankenPHP's admin API inside the container:</p>
           <Code lang="shell" code={workerRestart} />
           <ul>
-            <li><code>MAX_REQUESTS</code> sets how many requests a worker serves before it restarts, default <code>1000</code>, which caps the damage from memory leaks. In development, <code>1</code> gives a fresh app on every request.</li>
+            <li><code>MAX_REQUESTS</code> sets how many requests a worker serves before it restarts, default <code>1000</code>. Each restart frees any memory the app leaked. In development, <code>1</code> gives a fresh app on every request.</li>
             <li>State in statics and singletons lives as long as the worker, and each worker thread has its own. Follow Octane's rules on state.</li>
             <li><code>route:cache</code> serialises route closures, so a <code>static</code> inside a closure resets on every request. Keep long-lived state in classes.</li>
           </ul>
@@ -1017,12 +1017,12 @@ const toc = [
           </ul>
 
           <h4 id="symfony-compose">Web, Messenger and Scheduler</h4>
-          <p>A separate consumer handles the Scheduler's recurring messages from the <code>scheduler_default</code> transport. <code>--time-limit</code> and <code>--memory-limit</code> make consumers exit cleanly every so often, and <code>restart: unless-stopped</code> starts them again, which keeps memory in check.</p>
+          <p>A separate consumer handles the Scheduler's recurring messages from the <code>scheduler_default</code> transport. <code>--time-limit</code> and <code>--memory-limit</code> make consumers exit cleanly every so often, and <code>restart: unless-stopped</code> starts them again with fresh memory.</p>
           <Code lang="compose.yaml" code={symfonyCompose} />
           <p class="muted">The <code>doctrine://</code> Messenger transport needs <code>symfony/doctrine-messenger</code>, which <code>symfony/orm-pack</code> doesn't install. Without it, <code>doctrine:migrations:diff</code> also leaves out the <code>messenger_messages</code> table.</p>
 
           <h4 id="symfony-hardened">Read-only</h4>
-          <p>Symfony only reads the warmed cache under <code>var/cache</code>. At runtime it writes to <code>var/share</code>, which holds the <code>cache.app</code> pools and the Scheduler's checkpoint. The path is set when the cache is warmed, so mount over it rather than setting <code>APP_SHARE_DIR</code> at runtime.</p>
+          <p>Symfony only reads the warmed cache under <code>var/cache</code>. At runtime it writes to <code>var/share</code>, which holds the <code>cache.app</code> pools and the Scheduler's checkpoint. <code>cache:warmup</code> writes that path into the cache, so mount over it rather than setting <code>APP_SHARE_DIR</code> at runtime.</p>
           <Code lang="compose.hardened.yaml" code={symfonyHardened} />
           <p class="muted">On a tmpfs, the Scheduler loses its checkpoint on restart and doesn't catch up missed runs. To keep it, or to run more than one scheduler, use a volume for <code>/app/var/share</code> or move <code>cache.app</code> to Redis or the database.</p>
         </section>
