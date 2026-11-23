@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+[ "${LARAVEL_OPTIMIZE:-}" = true ] || exec "$@"
+if [ ! -f "$APP_ROOT/artisan" ]; then
+	echo "LARAVEL_OPTIMIZE: no $APP_ROOT/artisan, skipping" >&2
+	exec "$@"
+fi
+cd "$APP_ROOT"
+
+has_file_not_owned_by() { # <dir> <uid> <gid>
+	[ -n "$(find "$1" \( ! -user "$2" -o ! -group "$3" \) -print -quit)" ]
+}
+
+if [ -n "${PUID:-}" ]; then
+	gid="${PGID:-$PUID}"
+	for dir in storage bootstrap/cache; do
+		[ -d "$dir" ] || mkdir -p "$dir"
+		has_file_not_owned_by "$dir" "$PUID" "$gid" || continue
+		echo "LARAVEL_OPTIMIZE: chown -R $PUID:$gid $APP_ROOT/$dir" >&2
+		if ! err=$(chown -R "$PUID:$gid" "$dir" 2>&1); then
+			echo "$err" | head -n 1 >&2
+			echo "LARAVEL_OPTIMIZE: cannot chown $APP_ROOT/$dir to $PUID:$gid, which needs CAP_CHOWN and a writable path. Build it owned by PUID, or mount a tmpfs with uid=$PUID,gid=$gid" >&2
+			exit 1
+		fi
+	done
+fi
+
+run-as mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+run-as php artisan optimize
+exec "$@"

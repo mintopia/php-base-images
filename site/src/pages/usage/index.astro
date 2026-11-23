@@ -41,7 +41,7 @@ const franken = `services:
     volumes:
       - "./:/app"
     environment:
-      # without num, FrankenPHP starts 2 workers per host CPU, ignoring container CPU limits
+      # without num: 2 per CPU, every host CPU when the container has no CPU limit
       FRANKENPHP_CONFIG: |
         worker {
           file ./public/index.php
@@ -227,26 +227,15 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 COPY . .
-# every request that isn't a file goes to public/index.php, so that becomes Octane's worker
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-interaction \\
-    && cp vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php public/index.php \\
-    && php artisan package:discover --ansi \\
-    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+    && php artisan package:discover --ansi
 
 FROM ${php}:${v}-frankenphp
 ENV PUID=10001 PGID=10001 \\
-    OCTANE_SERVER=frankenphp \\
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \\
-    FRANKENPHP_CONFIG="worker /app/public/index.php"
-COPY --from=build /app /app
-COPY --chmod=755 docker/20-optimize /docker-entrypoint.d/20-optimize
-RUN chown -R 10001:10001 storage bootstrap/cache`;
-const laravelHook = `#!/bin/sh
-set -e
-# a tmpfs over storage/ starts empty
-run-as mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs
-run-as php artisan optimize
-exec "$@"`;
+    LARAVEL_OPTIMIZE=true \\
+    LARAVEL_OCTANE=true
+COPY --from=build /app /app`;
 const laravelIgnore = `.git
 .env
 vendor
@@ -297,12 +286,6 @@ services:
       <<: *env
       TRUSTED_PROXIES: 172.16.0.0/12
       MAX_REQUESTS: "1000"
-      # without num, FrankenPHP starts 2 workers per host CPU, ignoring container CPU limits
-      FRANKENPHP_CONFIG: |
-        worker {
-          file /app/public/index.php
-          num 4
-        }
     healthcheck: {}
 
   migrate:
@@ -352,10 +335,6 @@ const horizon = `  horizon:
     # longer than the longest supervisor timeout in config/horizon.php
     stop_grace_period: 70s`;
 const predis = `composer require predis/predis`;
-const fpmWorker = `  queue:
-    <<: *app
-    command: php artisan queue:work --tries=3 --max-time=3600
-    stop_grace_period: 70s`;
 const laravelHardened = `x-hardened: &hardened
   read_only: true
   cap_drop:
@@ -512,6 +491,7 @@ const common = [
   ['HOME', '<code>/tmp</code>', 'The home directory, for tools that write config or history there, such as psysh. <code>/tmp</code> stays writable under PUID and a read-only root.'],
   ['PUID', 'unset, so root', 'User ID the processes run as. See <a href="#hardened">Non-root and read-only</a>.'],
   ['PGID', 'same as <code>PUID</code>', 'Group ID the processes run as. Only used when <code>PUID</code> is set.'],
+  ['LARAVEL_OPTIMIZE', 'unset', '<code>true</code> runs <code>php artisan optimize</code> as <code>PUID</code> at start, after handing <code>storage/</code> and <code>bootstrap/cache</code> to <code>PUID</code>. See <a href="#octane">Laravel</a>.'],
 ];
 const php_ = [
   ['PHP_INI_MODE', '<code>production</code>', '<code>development</code> loads <code>php.ini-development</code>, which shows errors. Any other value stops the container.'],
@@ -545,6 +525,8 @@ const nginx_ = [
 const franken_ = [
   ['SERVER_NAME', '<code>:8080</code>', 'Address Caddy serves. Set a hostname and Caddy gets and renews its certificate. Port 80 and 443 must reach the container for that.'],
   ['FRANKENPHP_CONFIG', 'unset', 'Goes inside the <code>frankenphp</code> block, for example <code>worker ./public/index.php</code>.'],
+  ['LARAVEL_OCTANE', 'unset', '<code>true</code> serves the app through Laravel Octane\'s worker. See <a href="#octane">Laravel</a>.'],
+  ['LARAVEL_OCTANE_WORKERS', 'the container\'s CPU limit', 'Number of Octane workers.'],
   ['CADDY_GLOBAL_OPTIONS', 'unset', 'Goes inside the global options block.'],
   ['CADDY_EXTRA_CONFIG', 'unset', 'Top-level Caddyfile config, outside any site block.'],
   ['CADDY_SERVER_EXTRA_DIRECTIVES', 'unset', 'Directives in the site block, before PHP is served.'],
@@ -684,7 +666,7 @@ const toc = [
             </div>
           </figure>
           <Code lang="compose.yaml" code={franken} />
-          <p>Each worker thread keeps a booted copy of the app in memory. Give the worker block a <code>num</code>: the one-line <code>worker ./public/index.php</code> starts two per host CPU and ignores the container's CPU limit.</p>
+          <p>Each worker thread keeps a booted copy of the app in memory. Without <code>num</code>, FrankenPHP starts two per CPU the container may use, which is two per host CPU when the container has no CPU limit. Set <code>num</code> to size it yourself.</p>
           <p class="muted">Keep the image's start command. Replacing <code>CMD</code> or <code>ENTRYPOINT</code>, for example with <code>php artisan octane:frankenphp</code>, or setting <code>USER</code>, loses <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and start-up hooks. See <a href="#octane">Laravel Octane</a> and <a href="#symfony">Symfony</a> for worker mode without that.</p>
         </section>
 
@@ -947,7 +929,7 @@ const toc = [
         <section id="app-roles">
           <h3>One image, many roles</h3>
           <p>Build one image for the app. The web container runs it as it is. Queue workers, schedulers and one-off jobs run the same image with a different <code>command</code>, so they all go through the entrypoint and get <code>PUID</code>, the PHP settings and any <a href="#hooks">start-up hooks</a>.</p>
-          <p>Keep the web container's start command. Don't replace its <code>ENTRYPOINT</code> or <code>CMD</code>, and don't set <code>USER</code>. That includes <code>php artisan octane:frankenphp</code>, the command the Octane docs suggest: it starts its own Caddy with its own Caddyfile, and <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and the start-up hooks are all lost. Set <code>FRANKENPHP_CONFIG</code> instead, as below.</p>
+          <p>Keep the web container's start command. Don't replace its <code>ENTRYPOINT</code> or <code>CMD</code>, and don't set <code>USER</code>. That includes <code>php artisan octane:frankenphp</code>, the command the Octane docs suggest: it starts its own Caddy with its own Caddyfile, and <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and the start-up hooks are all lost. Use <code>LARAVEL_OCTANE</code> or <code>FRANKENPHP_CONFIG</code> instead, as below.</p>
           <ul>
             <li>Install Composer dependencies in a build stage on the same image, as in <a href="#composer">Composer</a>.</li>
             <li>Bake the code into the image, owned by root. Only the directories the app writes to need to belong to <code>PUID</code>.</li>
@@ -978,12 +960,15 @@ const toc = [
           <p>Tested with Laravel 13, Octane 2, Horizon 5 and Reverb 1.</p>
 
           <h4 id="octane">Octane on FrankenPHP</h4>
-          <p>The image's Caddyfile sends every request that isn't a static file to <code>public/index.php</code>. The build swaps that file for Octane's FrankenPHP worker script, and <code>FRANKENPHP_CONFIG</code> registers it as the worker. Caddy still serves static files. The <code>index.php</code> in your repository is untouched, so tests and <code>artisan serve</code> work as before.</p>
+          <p>Two variables do the Laravel-specific work, so the Dockerfile only installs dependencies and copies the app.</p>
           <Code lang="Dockerfile" code={laravelDockerfile} />
-          <p>The start-up hook caches config, routes, events and views when the container starts, so the cache holds the container's environment, not the build's. It runs as <code>PUID</code> through <code>run-as</code>, in every role, and adds about a second to each start.</p>
-          <Code lang="docker/20-optimize" code={laravelHook} />
           <Code lang=".dockerignore" code={laravelIgnore} />
-          <p>When it works, the log shows <code>FrankenPHP started</code> with <code>worker_threads</code> above 0, and requests after the first take a few milliseconds. Octane's worker script exits outside worker mode, so any successful response confirms it.</p>
+          <ul>
+            <li><code>LARAVEL_OCTANE=true</code> runs Octane's FrankenPHP worker script from <code>vendor/</code> for every request that isn't a static file. Caddy still serves files from <code>public/</code>, and nothing in the app is changed, so tests and <code>artisan serve</code> work as before.</li>
+            <li><code>LARAVEL_OCTANE_WORKERS</code> sets the number of workers. It defaults to the container's CPU limit, or the host's CPU count without one.</li>
+            <li><code>LARAVEL_OPTIMIZE=true</code> runs <code>php artisan optimize</code> as <code>PUID</code> when each container starts, so the cache holds the container's environment, not the build's. It adds about a second to each start. First it creates Laravel's storage directories and, if anything in <code>storage/</code> or <code>bootstrap/cache</code> isn't owned by <code>PUID</code>, changes its owner. That's the only place the image changes ownership for you.</li>
+          </ul>
+          <p>When it works, the log shows <code>FrankenPHP started</code> with <code>worker_threads</code> set to the worker count, and requests after the first take a few milliseconds.</p>
 
           <h4 id="laravel-compose">Web, queue, scheduler and Reverb</h4>
           <p>Every role is the same image. <code>migrate</code> runs first and the rest wait for it.</p>
@@ -1008,13 +993,12 @@ const toc = [
           </ul>
 
           <h4 id="laravel-hardened">Read-only</h4>
-          <p>This overlay for the compose file above runs every role on a read-only root with no capabilities beyond the switch to <code>PUID</code>. <code>storage/</code> and <code>bootstrap/cache</code> become tmpfs owned by <code>PUID</code>, which is why the start-up hook creates the <code>storage/</code> directories. Only the web role runs Caddy, so only it needs <code>/config</code> and <code>/data</code>. With Horizon, add <code>horizon: *hardened</code>.</p>
+          <p>This overlay for the compose file above runs every role on a read-only root with no capabilities beyond the switch to <code>PUID</code>. <code>storage/</code> and <code>bootstrap/cache</code> become tmpfs owned by <code>PUID</code>, so <code>LARAVEL_OPTIMIZE</code> has nothing to chown, which it couldn't do without <code>CAP_CHOWN</code>. Only the web role runs Caddy, so only it needs <code>/config</code> and <code>/data</code>. With Horizon, add <code>horizon: *hardened</code>.</p>
           <Code lang="compose.hardened.yaml" code={laravelHardened} />
           <p class="muted">Files on the <code>local</code> or <code>public</code> disk need a volume at <code>/app/storage/app</code>, or object storage. A tmpfs loses them on restart.</p>
 
           <h4 id="without-octane">Without Octane</h4>
-          <p>Use the same Dockerfile on the <code>php-fpm-nginx</code> image, without the <code>cp</code> of the worker script, <code>OCTANE_SERVER</code> and <code>FRANKENPHP_CONFIG</code>. A changed <code>command</code> replaces s6-overlay, so a worker runs alone as <code>PUID</code> and gets the stop signal directly:</p>
-          <Code lang="compose.yaml" code={fpmWorker} />
+          <p>Use the same Dockerfile and compose file on the <code>php-fpm-nginx</code> image, without <code>LARAVEL_OCTANE</code>. A changed <code>command</code> replaces s6-overlay there too, so workers run alone as <code>PUID</code> and get the stop signal directly.</p>
         </section>
 
         <section id="symfony">

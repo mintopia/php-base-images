@@ -10,6 +10,7 @@ work=$(mktemp -d)
 
 cleanup() {
 	docker rm -f "$id" "$id-fpm" >/dev/null 2>&1 || true
+	docker rmi -f "$id-app" >/dev/null 2>&1 || true
 	docker network rm "$id" >/dev/null 2>&1 || true
 	rm -rf "$work"
 }
@@ -30,6 +31,24 @@ echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
 echo '<?php echo implode("|", array_map(fn ($k) => $_SERVER[$k] ?? "", ["REMOTE_ADDR", "HTTPS", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED_PROTO", "HTTP_X_FORWARDED_HOST", "HTTP_FORWARDED"]));' > "$work/public/fwd.php"
 # shellcheck disable=SC2016
 echo '<?php echo implode(" ", array_keys(array_filter($_SERVER, fn ($v, $k) => $v === "" && str_starts_with($k, "HTTP_"), ARRAY_FILTER_USE_BOTH)));' > "$work/public/empty.php"
+make_laravel_app() {
+	mkdir -p "$work/laravel/public" "$work/laravel/storage/logs" "$work/laravel/bootstrap" "$work/laravel/vendor/laravel/octane/bin"
+	cat > "$work/laravel/artisan" <<'PHP'
+<?php
+if (($argv[1] ?? '') !== 'optimize') exit(1);
+file_put_contents(__DIR__ . '/bootstrap/cache/config.php', '<?php return [];');
+PHP
+	cat > "$work/laravel/vendor/laravel/octane/bin/frankenphp-worker.php" <<'PHP'
+<?php
+$n = 0;
+while (frankenphp_handle_request(function () use (&$n) {
+    echo 'octane ', ++$n, ' ', $_SERVER['APP_BASE_PATH'] ?? '', ' ', $_SERVER['HTTPS'] ?? '';
+}));
+PHP
+	echo static > "$work/laravel/public/static.txt"
+	touch "$work/laravel/storage/logs/old.log"
+}
+make_laravel_app
 spoof=(-H 'X-Forwarded-For: 6.6.6.6, 203.0.113.7' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Host: evil.example' -H 'Forwarded: for=6.6.6.6')
 chmod -R a+rX "$work"
 docker network create "$id" >/dev/null
@@ -66,6 +85,18 @@ http_ok() {
 	[[ "${body:-}" == "PHP 8."* ]] || fail "GET / returned '${body:-}'"
 }
 
+bake_root_owned_laravel_app() {
+	printf 'FROM %s\nCOPY . /app\n' "$image" | docker build -q -t "$id-app" -f - "$work/laravel" >/dev/null
+}
+
+wait_log() {
+	for _ in $(seq 30); do
+		docker logs "$id" 2>&1 | grep -q "$1" && return 0
+		sleep 1
+	done
+	fail "log never showed '$1'"
+}
+
 # read-only root plus the documented tmpfs mounts, as PUID with only the caps PUID needs
 hardened=(--read-only --cap-drop ALL --cap-add SETUID --cap-add SETGID -e PUID=1000)
 
@@ -94,6 +125,16 @@ case "$target" in
 		chmod +x "$work/hooks/"*
 		out=$(docker run --rm -e PUID=1000 -v "$work/hooks:/docker-entrypoint.d:ro" "$image" sh -c 'echo "$HOOKS$(id -u)"')
 		[ "$out" = "10-a:0 20-b:0 1000" ] || fail "entrypoint hooks returned '$out'"
+		bake_root_owned_laravel_app
+		owners=$(docker run --rm -e LARAVEL_OPTIMIZE=true -e PUID=1000 "$id-app" \
+			sh -c 'echo $(stat -c %u bootstrap/cache/config.php storage/logs/old.log storage/framework/views) $(id -u)')
+		[ "$owners" = "1000 1000 1000 1000" ] || fail "LARAVEL_OPTIMIZE as PUID gave owners '$owners'"
+		[ "$(docker run --rm -e LARAVEL_OPTIMIZE=true "$id-app" stat -c %u bootstrap/cache/config.php)" = 0 ] || fail "LARAVEL_OPTIMIZE without PUID"
+		err=$(docker run --rm "${hardened[@]}" -e LARAVEL_OPTIMIZE=true "$id-app" true 2>&1) && fail "LARAVEL_OPTIMIZE ran with root-owned storage on a read-only root"
+		[[ "$err" == *"cannot chown"* ]] || fail "LARAVEL_OPTIMIZE failure unclear: $err"
+		docker run --rm "${hardened[@]}" -e LARAVEL_OPTIMIZE=true --tmpfs /app/storage:uid=1000,gid=1000 --tmpfs /app/bootstrap/cache:uid=1000,gid=1000 \
+			"$id-app" test -f bootstrap/cache/config.php || fail "LARAVEL_OPTIMIZE with tmpfs storage under --read-only"
+		docker run --rm -e LARAVEL_OPTIMIZE=true "$image" true 2>/dev/null || fail "LARAVEL_OPTIMIZE without artisan"
 		;;
 	php-fpm)
 		check_php
@@ -151,6 +192,21 @@ case "$target" in
 		[ "$fwd" = "203.0.113.7|on|203.0.113.7|https|evil.example|" ] || fail "trusted proxy headers seen as '$fwd'"
 		empty=$(curl -fsS "${spoof[@]}" "http://127.0.0.1:$port/empty.php")
 		[ -z "$empty" ] || fail "empty headers reached PHP: $empty"
+		docker rm -f "$id" >/dev/null
+		octane=(-e LARAVEL_OCTANE=true -v "$work/laravel:/app:ro")
+		! docker run --rm "${octane[@]}" -e FRANKENPHP_CONFIG='worker /app/public/index.php' "$image" true 2>/dev/null || fail "LARAVEL_OCTANE accepted a second worker"
+		docker run -d --name "$id" -p 127.0.0.1::8080 --cpus 2 "${hardened[@]}" --tmpfs /data --tmpfs /config --tmpfs /tmp \
+			-e TRUSTED_PROXIES='127.0.0.1/32 ::1/128' "${octane[@]}" "$image" >/dev/null
+		port=$(docker port "$id" 8080/tcp | head -1 | cut -d: -f2)
+		wait_log '"worker_threads":2,'
+		body=$(curl -fsS "http://127.0.0.1:$port/some/route")
+		[[ "$body" == "octane "[0-9]*" /app " ]] || fail "LARAVEL_OCTANE request returned '$body'"
+		[ "$(curl -fsS "http://127.0.0.1:$port/static.txt")" = static ] || fail "LARAVEL_OCTANE static file"
+		body=$(docker exec "$id" curl -fsS -H 'X-Forwarded-Proto: https' http://127.0.0.1:8080/)
+		[[ "$body" == *" on" ]] || fail "LARAVEL_OCTANE behind a trusted proxy returned '$body'"
+		docker rm -f "$id" >/dev/null
+		docker run -d --name "$id" "${octane[@]}" -e LARAVEL_OCTANE_WORKERS=3 "$image" >/dev/null
+		wait_log '"worker_threads":3,'
 		;;
 	nginx)
 		docker run -d --name "$id-fpm" --network "$id" --network-alias php-fpm -v "$work/public:/app/public:ro" "$sidecar" >/dev/null

@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - run: find rootfs build tests scripts -name '*.sh' -print0 | xargs -0 shellcheck
+      - run: find rootfs build tests scripts -type f \( -name '*.sh' -o -path '*/docker-entrypoint.d/*' \) -print0 | xargs -0 shellcheck
 
   actionlint:
     runs-on: ubuntu-24.04
