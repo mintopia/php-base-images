@@ -23,7 +23,7 @@ record() { # <image> <digest> <created> <tags, or - for none> <platforms json>
 		esac
 		case $(jq -r '((.Cmd // [])[0] // "") + " " + ((.Entrypoint // []) | join(" "))' <<<"$config") in
 			nginx*) variant=nginx ;; php-fpm*) variant=php-fpm ;; frankenphp*) variant=frankenphp ;;
-			php\ *) variant=cli ;; *" /init"*) variant=php-fpm-nginx ;; *) return 0 ;;
+			php\ *) variant=cli ;; /init\ * | *" /init"*) variant=php-fpm-nginx ;; *) return 0 ;;
 		esac
 		if [ "$variant" = nginx ]; then version=$latest
 		# without tags the PHP version must come from the image itself

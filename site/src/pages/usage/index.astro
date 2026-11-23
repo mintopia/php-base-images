@@ -354,7 +354,6 @@ const horizon = `  horizon:
 const predis = `composer require predis/predis`;
 const fpmWorker = `  queue:
     <<: *app
-    entrypoint: ["docker-entrypoint.sh"]
     command: php artisan queue:work --tries=3 --max-time=3600
     stop_grace_period: 70s`;
 const laravelHardened = `x-hardened: &hardened
@@ -947,7 +946,7 @@ const toc = [
 
         <section id="app-roles">
           <h3>One image, many roles</h3>
-          <p>Build one image for the app. The web container runs it as it is. Queue workers, schedulers and one-off jobs run the same image with a different <code>command</code>, so they all go through the entrypoint and get <code>PUID</code>, the PHP settings and any <a href="#hooks">start-up hooks</a>. On <code>php-fpm-nginx</code>, those roles also need <code>entrypoint: ["docker-entrypoint.sh"]</code>; see <a href="#without-octane">Without Octane</a>.</p>
+          <p>Build one image for the app. The web container runs it as it is. Queue workers, schedulers and one-off jobs run the same image with a different <code>command</code>, so they all go through the entrypoint and get <code>PUID</code>, the PHP settings and any <a href="#hooks">start-up hooks</a>.</p>
           <p>Keep the web container's start command. Don't replace its <code>ENTRYPOINT</code> or <code>CMD</code>, and don't set <code>USER</code>. That includes <code>php artisan octane:frankenphp</code>, the command the Octane docs suggest: it starts its own Caddy with its own Caddyfile, and <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and the start-up hooks are all lost. Set <code>FRANKENPHP_CONFIG</code> instead, as below.</p>
           <ul>
             <li>Install Composer dependencies in a build stage on the same image, as in <a href="#composer">Composer</a>.</li>
@@ -1014,7 +1013,7 @@ const toc = [
           <p class="muted">Files on the <code>local</code> or <code>public</code> disk need a volume at <code>/app/storage/app</code>, or object storage. A tmpfs loses them on restart.</p>
 
           <h4 id="without-octane">Without Octane</h4>
-          <p>Use the same Dockerfile on the <code>php-fpm-nginx</code> image, without the <code>cp</code> of the worker script, <code>OCTANE_SERVER</code> and <code>FRANKENPHP_CONFIG</code>. That image's entrypoint starts s6-overlay, which would run a changed <code>command</code> as root next to nginx and php-fpm, and stop it without waiting for the current job. Give every role except the web one the plain entrypoint:</p>
+          <p>Use the same Dockerfile on the <code>php-fpm-nginx</code> image, without the <code>cp</code> of the worker script, <code>OCTANE_SERVER</code> and <code>FRANKENPHP_CONFIG</code>. A changed <code>command</code> replaces s6-overlay, so a worker runs alone as <code>PUID</code> and gets the stop signal directly:</p>
           <Code lang="compose.yaml" code={fpmWorker} />
         </section>
 
@@ -1030,7 +1029,7 @@ const toc = [
             <li>The build warms the cache without the real <code>APP_SECRET</code> or <code>DATABASE_URL</code>. Symfony reads those from the environment when the container starts.</li>
             <li>Skip <code>composer dump-env prod</code>. It bakes the placeholder values from <code>.env</code> into the image, so a variable you forget to set falls back to a placeholder instead of failing.</li>
             <li><code>FRANKENPHP_LOOP_MAX</code> sets how many requests a worker serves before it restarts, default <code>500</code>.</li>
-            <li>On <code>php-fpm-nginx</code>, change both <code>FROM</code> lines and give the Messenger and Scheduler roles <code>entrypoint: ["docker-entrypoint.sh"]</code>.</li>
+            <li>On <code>php-fpm-nginx</code>, change both <code>FROM</code> lines.</li>
           </ul>
 
           <h4 id="symfony-compose">Web, Messenger and Scheduler</h4>

@@ -23,6 +23,7 @@ fail() {
 
 mkdir -p "$work/public"
 echo '<?php echo "PHP ", PHP_VERSION;' > "$work/public/index.php"
+echo '<?php sleep(4); echo "done";' > "$work/public/slow.php"
 # shellcheck disable=SC2016
 echo '<?php echo $_SERVER["REMOTE_ADDR"];' > "$work/public/addr.php"
 # shellcheck disable=SC2016
@@ -132,6 +133,12 @@ case "$target" in
 		[ "$fwd" = "127.0.0.1||127.0.0.1|http||" ] || fail "untrusted forwarded headers reached PHP: '$fwd'"
 		workers=$(docker exec "$id" sh -c 'for p in /proc/[0-9]*; do [ "$p" != /proc/$$ ] && grep -qaE "php-fpm: pool|nginx: worker" "$p/cmdline" 2>/dev/null && stat -c %u "$p"; done; true' | sort -u)
 		[ "$workers" = 1000 ] || fail "workers run as '$workers'"
+		[ "$(docker run --rm -e PUID=1000 "$image" sh -c 'echo "$(id -u) $$"')" = "1000 1" ] || fail "changed command not run alone as PUID"
+		curl -fsS -o "$work/slow.out" "http://127.0.0.1:$port/slow.php" &
+		slow=$!
+		sleep 1
+		docker stop -t 15 "$id" >/dev/null
+		wait "$slow" && [ "$(cat "$work/slow.out")" = "done" ] || fail "docker stop cut off an in-flight request"
 		;;
 	frankenphp)
 		check_php

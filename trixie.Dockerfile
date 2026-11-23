@@ -146,8 +146,8 @@ ENV PHP_FPM_HOST=127.0.0.1 \
 STOPSIGNAL SIGTERM
 WORKDIR /app
 EXPOSE 8080
-ENTRYPOINT ["docker-entrypoint.sh", "/init"]
-CMD []
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["/init"]
 
 FROM debian:trixie-slim AS nginx
 ARG PKG_STAMP
