@@ -667,7 +667,7 @@ const toc = [
           </figure>
           <Code lang="compose.yaml" code={franken} />
           <p>Each worker thread keeps a booted copy of the app in memory. Without <code>num</code>, FrankenPHP starts two per CPU the container may use, which is two per host CPU when the container has no CPU limit. Set <code>num</code> to size it yourself.</p>
-          <p class="muted">Keep the image's start command. Replacing <code>CMD</code> or <code>ENTRYPOINT</code>, for example with <code>php artisan octane:frankenphp</code>, or setting <code>USER</code>, loses <code>TRUSTED_PROXIES</code>, <code>HTTPS</code> behind a proxy, <code>PUID</code> and start-up hooks. See <a href="#octane">Laravel Octane</a> and <a href="#symfony">Symfony</a> for worker mode without that.</p>
+          <p class="muted">Keep the image's start command, including for Laravel Octane. <a href="#app-roles">One image, many roles</a> explains why, and <a href="#octane">Laravel</a> and <a href="#symfony">Symfony</a> show worker mode without replacing it.</p>
         </section>
 
         <section id="cli-setup">
@@ -924,7 +924,7 @@ const toc = [
         </section>
 
         <h2 id="frameworks">Frameworks</h2>
-        <p>Laravel and Symfony recipes, each run against the published images before being written down.</p>
+        <p>Recipes for Laravel and Symfony, each tested on the published images.</p>
 
         <section id="app-roles">
           <h3>One image, many roles</h3>
@@ -960,7 +960,7 @@ const toc = [
           <p>Tested with Laravel 13, Octane 2, Horizon 5 and Reverb 1.</p>
 
           <h4 id="octane">Octane on FrankenPHP</h4>
-          <p>Two variables do the Laravel-specific work, so the Dockerfile only installs dependencies and copies the app.</p>
+          <p>The image handles the Laravel-specific steps through environment variables, so the Dockerfile only installs dependencies and copies the app.</p>
           <Code lang="Dockerfile" code={laravelDockerfile} />
           <Code lang=".dockerignore" code={laravelIgnore} />
           <ul>
@@ -984,7 +984,7 @@ const toc = [
           <Code lang="compose.yaml" code={horizon} />
 
           <h4 id="laravel-reload">Reloading and tuning</h4>
-          <p>Octane isn't managing the server here, so <code>octane:status</code> and <code>octane:reload</code> report that it isn't running. Deploy by replacing containers. To restart the workers in place without dropping connections, call FrankenPHP's admin API inside the container:</p>
+          <p>The image starts the server, not Octane, so <code>octane:status</code> and <code>octane:reload</code> report that it isn't running. Deploy by replacing containers. To restart the workers in place without dropping connections, call FrankenPHP's admin API inside the container:</p>
           <Code lang="shell" code={workerRestart} />
           <ul>
             <li><code>MAX_REQUESTS</code> sets how many requests a worker serves before it restarts, default <code>1000</code>, which caps the damage from memory leaks. In development, <code>1</code> gives a fresh app on every request.</li>
@@ -1022,7 +1022,7 @@ const toc = [
           <p class="muted">The <code>doctrine://</code> Messenger transport needs <code>symfony/doctrine-messenger</code>, which <code>symfony/orm-pack</code> doesn't install. Without it, <code>doctrine:migrations:diff</code> also leaves out the <code>messenger_messages</code> table.</p>
 
           <h4 id="symfony-hardened">Read-only</h4>
-          <p>Symfony only reads the warmed cache under <code>var/cache</code>. At runtime it writes to <code>var/share</code>, which holds the <code>cache.app</code> pools and the Scheduler's checkpoint. Warming the cache fixes that path, so mount over it rather than setting <code>APP_SHARE_DIR</code> at runtime.</p>
+          <p>Symfony only reads the warmed cache under <code>var/cache</code>. At runtime it writes to <code>var/share</code>, which holds the <code>cache.app</code> pools and the Scheduler's checkpoint. The path is set when the cache is warmed, so mount over it rather than setting <code>APP_SHARE_DIR</code> at runtime.</p>
           <Code lang="compose.hardened.yaml" code={symfonyHardened} />
           <p class="muted">On a tmpfs, the Scheduler loses its checkpoint on restart and doesn't catch up missed runs. To keep it, or to run more than one scheduler, use a volume for <code>/app/var/share</code> or move <code>cache.app</code> to Redis or the database.</p>
         </section>
