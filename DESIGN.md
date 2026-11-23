@@ -170,7 +170,7 @@ Line colours are mid-luminance so they hold on the dark ground. Lines are applie
 ### Hierarchy
 - **Display** (JetBrains Mono 500, clamp(28px, 4.2vw, 52px), 1.05, -0.03em): the image tag on image and build pages and the reference in the home hero. The repo name sits above it at 14px mono, muted.
 - **Hero** (Hanken 700, clamp(40px, 6vw, 80px), 1, -0.03em): the home page's plain "PHP base images" title. No slogans; lede below at 18px muted.
-- **Headline** (Hanken 700, clamp(28px, 4vw, 40px), 1.1, -0.03em): page titles on Images, Matrix, Usage, Frameworks, Changelog; lede below at 16px muted, never capped to a narrow measure.
+- **Headline** (Hanken 700, clamp(28px, 4vw, 40px), 1.1, -0.03em): page titles on Images, Matrix, Usage, Changelog; lede below at 16px muted, never capped to a narrow measure.
 - **Title** (Hanken 700, 13px, uppercase, 0.08em): section headings (`h2`) such as "Use it", "Every build", "On board now".
 - **Body** (Hanken 400, 15px, 1.55): default text. Tables and lists step down to 13-14px.
 - **Label** (Hanken 500, 12px, muted): table headers and picker legends.
@@ -238,7 +238,7 @@ The build history table. Headers 12px muted over a 2px ink rule; rows separated 
 Figure with a board-filled caption bar (file name in 12px mono, compact Copy button) over a Shiki block on `raise`, 1px rule border, 10px radius. On image and build pages a Dockerfile extending the image and a compose file using it directly, chosen per variant.
 
 ### Navigation
-Header nav (Images, Matrix, Usage, Frameworks, Changelog, About; the brand links home) is 14px 500 muted, with ink text on hover; the current page is ink with a 2px ink underline sitting on the header's bottom rule. Under 720px it becomes a horizontally scrolling row.
+Header nav (Images, Matrix, Usage, Changelog, About; the brand links home) is 14px 500 muted, with ink text on hover; the current page is ink with a 2px ink underline sitting on the header's bottom rule. Under 720px it becomes a horizontally scrolling row.
 
 ## Do's and Don'ts
 

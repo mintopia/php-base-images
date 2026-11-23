@@ -5,8 +5,7 @@ Multi-arch (amd64, arm64) PHP images for Alpine and Debian trixie, published to 
 ## Using the images: [php.mintopia.net](https://php.mintopia.net/)
 
 - [Images](https://php.mintopia.net/images/): pick a PHP version, OS and Variant for the exact tag, what's in it and every build.
-- [Usage](https://php.mintopia.net/usage/): compose files for each Variant, proxies, hardening, logs, extending and Xdebug.
-- [Frameworks](https://php.mintopia.net/frameworks/): Laravel (Octane on FrankenPHP, queues, Horizon, scheduler, Reverb, migrations) and Symfony (worker mode, Messenger, Scheduler).
+- [Usage](https://php.mintopia.net/usage/): compose files for each Variant, proxies, hardening, logs, extending, Laravel and Symfony, and Xdebug.
 - [Matrix](https://php.mintopia.net/matrix/): extensions per PHP version, and which Variants exist on which OS.
 - [Changelog](https://php.mintopia.net/changelog/): what changed in each published build.
 
@@ -163,7 +162,7 @@ These settings apply to the `nginx` image (`ghcr.io/mintopia/nginx`) and to `php
 
 FrankenPHP also imports any `*.caddyfile` files in `/etc/frankenphp/Caddyfile.d/`.
 
-Keep the image's start command. Replacing `CMD` or `ENTRYPOINT`, including with `php artisan octane:frankenphp`, or setting `USER`, bypasses the entrypoint and this Caddyfile, so `TRUSTED_PROXIES`, `HTTPS` behind a proxy, `PUID` and `/docker-entrypoint.d/` hooks are all lost. See [Laravel Octane](#laravel-octane) and [Frameworks](https://php.mintopia.net/frameworks/#octane).
+Keep the image's start command. Replacing `CMD` or `ENTRYPOINT`, including with `php artisan octane:frankenphp`, or setting `USER`, bypasses the entrypoint and this Caddyfile, so `TRUSTED_PROXIES`, `HTTPS` behind a proxy, `PUID` and `/docker-entrypoint.d/` hooks are all lost. See [Laravel Octane](#laravel-octane) and [the usage guide](https://php.mintopia.net/usage/#octane).
 
 #### Laravel Octane
 
@@ -174,7 +173,7 @@ RUN cp vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php public/ind
 ENV OCTANE_SERVER=frankenphp FRANKENPHP_CONFIG="worker /app/public/index.php"
 ```
 
-Queue workers, Horizon, the scheduler, Reverb and migrations run the same image with only `command` changed. `octane:status` and `octane:reload` don't apply; `MAX_REQUESTS` sets requests per worker. The full recipe, with compose files and Symfony's equivalent, is on [Frameworks](https://php.mintopia.net/frameworks/#octane).
+Queue workers, Horizon, the scheduler, Reverb and migrations run the same image with only `command` changed. `octane:status` and `octane:reload` don't apply; `MAX_REQUESTS` sets requests per worker. The full recipe, with compose files and Symfony's equivalent, is in [the usage guide](https://php.mintopia.net/usage/#octane).
 
 ### Client IP and proxies
 

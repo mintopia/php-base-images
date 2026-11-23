@@ -22,8 +22,7 @@ ${lines.join('\n')}
 
 ## Docs
 
-- [Usage](${url('usage/')}): running, configuring and extending the images, with compose files and Dockerfiles
-- [Frameworks](${url('frameworks/')}): Laravel (Octane on FrankenPHP, queues, Horizon, scheduler, Reverb) and Symfony (worker mode, Messenger, Scheduler), with migrations
+- [Usage](${url('usage/')}): running, configuring and extending the images, with compose files and Dockerfiles, plus Laravel (Octane on FrankenPHP, queues, Horizon, scheduler, Reverb, migrations) and Symfony (worker mode, Messenger, Scheduler)
 - [Matrix](${url('matrix/')}): extensions and versions in every image
 - [Changelog](${url('changelog/')}): changes build by build
 - [About](${url('about/')}): what is built, how it is built and tested, and when images are rebuilt
