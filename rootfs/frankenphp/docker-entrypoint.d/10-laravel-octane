@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+[ "${LARAVEL_OCTANE:-}" = true ] || exec "$@"
+worker="$APP_ROOT/vendor/laravel/octane/bin/frankenphp-worker.php"
+if [ ! -f "$worker" ]; then
+	echo "LARAVEL_OCTANE: no $worker, so install laravel/octane" >&2
+	exit 1
+fi
+case "${FRANKENPHP_CONFIG:-}" in
+	*worker*) echo "LARAVEL_OCTANE: FRANKENPHP_CONFIG already defines a worker; remove it" >&2; exit 1 ;;
+esac
+
+num=
+[ -z "${LARAVEL_OCTANE_WORKERS:-}" ] || num="num $LARAVEL_OCTANE_WORKERS"
+
+export FRANKENPHP_PHP_SERVER_CONFIG="worker {
+	file \"$worker\"
+	$num
+	match /*
+	env APP_BASE_PATH \"$APP_ROOT\"
+	env APP_PUBLIC_PATH \"$APP_PUBLIC_PATH\"
+}"
+exec "$@"

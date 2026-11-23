@@ -126,8 +126,8 @@ ENV PHP_FPM_HOST=127.0.0.1 \
     S6_KEEP_ENV=1
 STOPSIGNAL SIGTERM
 EXPOSE 8080
-ENTRYPOINT ["docker-entrypoint.sh", "/init"]
-CMD []
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["/init"]
 
 FROM alpine:${ALPINE_VERSION} AS nginx
 ARG PKG_STAMP

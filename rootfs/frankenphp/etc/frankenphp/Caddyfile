@@ -40,6 +40,7 @@
 		env REQUEST_SCHEME {forwarded_proto}
 		env HTTP_X_FORWARDED_FOR {client_ip}
 		env HTTP_X_FORWARDED_PROTO {forwarded_proto}
+		{$FRANKENPHP_PHP_SERVER_CONFIG}
 	}
 }
 

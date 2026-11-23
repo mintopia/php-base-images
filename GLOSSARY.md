@@ -44,7 +44,7 @@ The directory served over HTTP, set by `APP_PUBLIC_PATH` (default `$APP_ROOT/pub
 _Avoid_: document root, web root, nginx root
 
 **PUID / PGID**:
-Optional runtime UID and GID the processes run as. Omitted means root. No ownership of mounts is changed on the user's behalf.
+Optional runtime UID and GID the processes run as. Omitted means root. No ownership of mounts is changed on the user's behalf, except `storage/` and `bootstrap/cache` under `LARAVEL_OPTIMIZE` (ADR 0036).
 
 **Smoke test**:
 The per-Target check run in a Lane before anything is pushed.

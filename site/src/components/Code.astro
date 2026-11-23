@@ -4,7 +4,7 @@ import Copy from './Copy.astro';
 
 interface Props { code: string; lang: string }
 const { code, lang } = Astro.props;
-const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml' };
+const LANGS: Record<string, string> = { 'compose.yaml': 'yaml', shell: 'sh', Dockerfile: 'dockerfile', dockerfile: 'dockerfile', sh: 'sh', ini: 'ini', 'xdebug.ini': 'ini', yaml: 'yaml', 'compose.hardened.yaml': 'yaml', 'bootstrap/app.php': 'php', };
 ---
 <figure class="code">
   <figcaption><span>{lang}</span><Copy text={code} /></figcaption>

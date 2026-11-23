@@ -5,7 +5,7 @@ Multi-arch (amd64, arm64) PHP images for Alpine and Debian trixie, published to 
 ## Using the images: [php.mintopia.net](https://php.mintopia.net/)
 
 - [Images](https://php.mintopia.net/images/): pick a PHP version, OS and Variant for the exact tag, what's in it and every build.
-- [Usage](https://php.mintopia.net/usage/): compose files for each Variant, proxies, hardening, logs, extending and Xdebug.
+- [Usage](https://php.mintopia.net/usage/): compose files for each Variant, proxies, hardening, logs, extending, Laravel and Symfony, and Xdebug.
 - [Matrix](https://php.mintopia.net/matrix/): extensions per PHP version, and which Variants exist on which OS.
 - [Changelog](https://php.mintopia.net/changelog/): what changed in each published build.
 
@@ -98,7 +98,7 @@ The images read all settings from environment variables when the container start
 | `PHP_SESSION_USE_STRICT_MODE` | `0` |
 | `PHP_SESSION_COOKIE_SAMESITE` | empty, which sends no `SameSite` attribute |
 
-Setting `PUID` runs the container's processes with that UID. The group ID is `PGID`, which defaults to `PUID`. The IDs are applied numerically, so no user is added to `/etc/passwd`. php-fpm's master stays root and runs its workers as `PUID`. The entrypoint doesn't chown anything, so mounts must already be readable by that user.
+Setting `PUID` runs the container's processes with that UID. The group ID is `PGID`, which defaults to `PUID`. The IDs are applied numerically, so no user is added to `/etc/passwd`. php-fpm's master stays root and runs its workers as `PUID`. The entrypoint doesn't chown anything, so mounts must already be readable by that user. The one exception is [`LARAVEL_OPTIMIZE`](#laravel).
 
 #### Chaining entrypoints
 
@@ -155,12 +155,27 @@ These settings apply to the `nginx` image (`ghcr.io/mintopia/nginx`) and to `php
 |---|---|
 | `SERVER_NAME` | `:8080`. Setting a hostname turns on Caddy's automatic HTTPS |
 | `FRANKENPHP_CONFIG` | unset. Goes inside the `frankenphp` global block, for example `worker ./public/index.php` |
+| `FRANKENPHP_PHP_SERVER_CONFIG` | unset. Goes inside `php_server`; set by `LARAVEL_OCTANE` |
 | `CADDY_GLOBAL_OPTIONS` | unset. Caddy global options |
 | `CADDY_EXTRA_CONFIG` | unset. Extra top-level Caddyfile config |
 | `CADDY_SERVER_EXTRA_DIRECTIVES` | unset. Extra directives in the site block |
 | `TRUSTED_PROXIES`, `CLIENT_IP_HEADER` | see [Client IP and proxies](#client-ip-and-proxies) |
 
 FrankenPHP also imports any `*.caddyfile` files in `/etc/frankenphp/Caddyfile.d/`.
+
+Keep the image's start command. Replacing `CMD` or `ENTRYPOINT`, including with `php artisan octane:frankenphp`, or setting `USER`, bypasses the entrypoint and this Caddyfile, so `TRUSTED_PROXIES`, `HTTPS` behind a proxy, `PUID` and `/docker-entrypoint.d/` hooks are all lost. Use [`LARAVEL_OCTANE`](#laravel) instead.
+
+#### Laravel
+
+| Variable | Image | Default |
+|---|---|---|
+| `LARAVEL_OCTANE` | `frankenphp` | unset. `true` runs `vendor/laravel/octane/bin/frankenphp-worker.php` as a worker for every request that isn't a static file |
+| `LARAVEL_OCTANE_WORKERS` | `frankenphp` | unset. FrankenPHP then starts two per CPU the container may use |
+| `LARAVEL_OPTIMIZE` | all PHP | unset. `true` runs `php artisan optimize` as PUID at start |
+
+These replace `php artisan octane:frankenphp`, so every role keeps the image's start. `LARAVEL_OCTANE` adds the worker to `php_server` through `FRANKENPHP_PHP_SERVER_CONFIG` and refuses to start if `FRANKENPHP_CONFIG` also defines one. `octane:status` and `octane:reload` don't apply; `MAX_REQUESTS` sets requests per worker.
+
+Before optimising, `LARAVEL_OPTIMIZE` creates Laravel's storage directories and, when PUID is set and anything in `storage/` or `bootstrap/cache` is owned by someone else, chowns those two directories to PUID:PGID. That needs `CAP_CHOWN`; without it, mount them as a tmpfs with `uid=` and `gid=`, or the container stops with an explanation. See ADR 0036, and the [usage guide](https://php.mintopia.net/usage/#octane) for the full recipe.
 
 ### Client IP and proxies
 

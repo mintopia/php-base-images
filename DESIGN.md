@@ -238,7 +238,7 @@ The build history table. Headers 12px muted over a 2px ink rule; rows separated 
 Figure with a board-filled caption bar (file name in 12px mono, compact Copy button) over a Shiki block on `raise`, 1px rule border, 10px radius. On image and build pages a Dockerfile extending the image and a compose file using it directly, chosen per variant.
 
 ### Navigation
-Header nav (Images, Matrix, Usage, Changelog; the brand links home) is 14px 500 muted, with ink text on hover; the current page is ink with a 2px ink underline sitting on the header's bottom rule. Under 720px it becomes a horizontally scrolling row.
+Header nav (Images, Matrix, Usage, Changelog, About; the brand links home) is 14px 500 muted, with ink text on hover; the current page is ink with a 2px ink underline sitting on the header's bottom rule. Under 720px it becomes a horizontally scrolling row.
 
 ## Do's and Don'ts
 
